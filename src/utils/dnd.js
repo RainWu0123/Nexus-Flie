@@ -1,9 +1,11 @@
 /**
- * Nexus Files — Internal drag & drop
- * Pure mouse tracking on window (capture). Does not use HTML5 DnD.
+ * Nexus Files — Drag & Drop (Internal & External OS Drops)
+ * Supports dragging files internally and dragging files from Windows Desktop / Explorer.
  */
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import store from '../store/store.js';
-import { movePath, refreshCurrent } from './tauri-bridge.js';
+import { movePath, copyPath, refreshCurrent } from './tauri-bridge.js';
+import { toast } from './toast.js';
 import { t } from '../i18n/index.js';
 
 const THRESHOLD_PX = 5;
@@ -15,7 +17,7 @@ export function initDnd() {
   if (bound) return;
   bound = true;
 
-  // Use window + capture so we always see events, even after list re-renders
+  // Internal Drag & Drop (pure mouse tracking on window)
   window.addEventListener('mousedown', onDown, true);
   window.addEventListener('mousemove', onMove, true);
   window.addEventListener('mouseup', onUp, true);
@@ -24,7 +26,10 @@ export function initDnd() {
     if (e.key === 'Escape') cancel();
   });
 
-  console.log('[dnd] initialized');
+  // External OS Drag & Drop (files from Desktop / Explorer)
+  initExternalDnd();
+
+  console.log('[dnd] initialized (internal + external)');
 }
 
 export function isDragging() {
@@ -297,4 +302,162 @@ function status(msg) {
 function short(p) {
   if (!p) return '';
   return p.length > 48 ? '…' + p.slice(-46) : p;
+}
+
+// ─── External OS Drag & Drop (Windows Desktop / Explorer) ─────────────────────
+
+function initExternalDnd() {
+  let appWindow = null;
+  try {
+    appWindow = getCurrentWindow();
+  } catch {
+    // browser mode fallback
+  }
+
+  // 1. Native Tauri OS drag & drop event listener
+  if (appWindow && typeof appWindow.onDragDropEvent === 'function') {
+    try {
+      appWindow.onDragDropEvent(async (event) => {
+        const payload = event.payload;
+        if (!payload) return;
+
+        if (payload.type === 'over' || payload.type === 'hover') {
+          const { x, y } = payload.position || { x: 0, y: 0 };
+          hitTestExternal(x, y);
+        } else if (payload.type === 'drop') {
+          clearHl();
+          const { paths, position } = payload;
+          if (!paths || !paths.length) return;
+          const { x, y } = position || { x: 0, y: 0 };
+          await handleExternalDrop(paths, x, y);
+        } else if (payload.type === 'leave' || payload.type === 'cancel') {
+          clearHl();
+          status('');
+        }
+      });
+      console.log('[dnd] Registered Tauri native onDragDropEvent listener');
+    } catch (err) {
+      console.warn('[dnd] onDragDropEvent registration failed:', err);
+    }
+  }
+
+  // 2. Webview HTML5 dragover & drop fallback
+  window.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+  });
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    hitTestExternal(e.clientX, e.clientY);
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget) {
+      clearHl();
+      status('');
+    }
+  });
+  window.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    clearHl();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      const paths = [];
+      for (const file of e.dataTransfer.files) {
+        if (file.path) paths.push(file.path);
+      }
+      if (paths.length) {
+        await handleExternalDrop(paths, e.clientX, e.clientY);
+      }
+    }
+  });
+}
+
+function hitTestExternal(x, y) {
+  clearHl();
+  const el = document.elementFromPoint(x, y);
+  if (!el) return;
+
+  const folder = el.closest?.('.file-row.is-dir');
+  if (folder?.dataset.path) {
+    folder.classList.add('drag-over');
+    status(`釋放以複製到：${short(folder.dataset.path)}`);
+    return;
+  }
+
+  const nav = el.closest?.('.sidebar-item[data-path], .sidebar-drive[data-path]');
+  if (nav?.dataset.path && !nav.dataset.path.startsWith('nexus://')) {
+    nav.classList.add('drag-over');
+    status(`釋放以複製到：${short(nav.dataset.path)}`);
+    return;
+  }
+
+  const sec = el.closest?.('#file-list-secondary, .secondary-list');
+  if (sec) {
+    const secPath = store.get('secondaryPath');
+    if (secPath && !secPath.startsWith('nexus://')) {
+      sec.classList.add('drag-over');
+      status(`釋放以複製到：${short(secPath)}`);
+      return;
+    }
+  }
+
+  const cur = store.get('currentPath');
+  if (cur && !cur.startsWith('nexus://')) {
+    const container = document.getElementById('file-list-container');
+    if (container && (container.contains(el) || el === container)) {
+      container.classList.add('drag-over');
+    }
+    status(`釋放以複製到目前資料夾：${short(cur)}`);
+  }
+}
+
+async function handleExternalDrop(paths, x, y) {
+  clearHl();
+  const el = document.elementFromPoint(x, y);
+  let dest = null;
+
+  const folder = el?.closest?.('.file-row.is-dir');
+  if (folder?.dataset.path) {
+    dest = folder.dataset.path;
+  } else {
+    const nav = el?.closest?.('.sidebar-item[data-path], .sidebar-drive[data-path]');
+    if (nav?.dataset.path && !nav.dataset.path.startsWith('nexus://')) {
+      dest = nav.dataset.path;
+    } else if (el?.closest?.('#file-list-secondary, .secondary-list')) {
+      const secPath = store.get('secondaryPath');
+      if (secPath && !secPath.startsWith('nexus://')) dest = secPath;
+    }
+  }
+
+  if (!dest) {
+    dest = store.get('currentPath');
+  }
+
+  if (!dest || dest.startsWith('nexus://')) {
+    toast('無法複製到此位置，請先開啟實際資料夾', 'warning');
+    return;
+  }
+
+  status(`正在複製 ${paths.length} 個項目至 ${short(dest)}...`);
+  let ok = 0;
+  const errs = [];
+
+  for (const p of paths) {
+    try {
+      console.log('[external dnd] copy', p, '->', dest);
+      await copyPath(p, dest, false);
+      ok++;
+    } catch (err) {
+      console.error('[external dnd] copy failed', p, err);
+      errs.push(`${p}: ${err}`);
+    }
+  }
+
+  await refreshCurrent();
+  if (errs.length) {
+    status(`複製完成：${ok} 成功，${errs.length} 失敗`);
+    toast(`已複製 ${ok} 個項目，${errs.length} 個失敗`, 'error');
+  } else {
+    status(`已成功複製 ${ok} 個項目至 ${short(dest)}`);
+    toast(`已複製 ${ok} 個項目至 ${short(dest)}`, 'success');
+  }
 }

@@ -194,6 +194,12 @@ body.is-marquee-selecting {
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
+#file-list-container.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: var(--bg-selected);
+}
+
 .file-row.dragging {
   opacity: 0.4;
   pointer-events: none;
