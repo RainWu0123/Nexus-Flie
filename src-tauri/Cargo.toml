@@ -1,0 +1,34 @@
+[package]
+name = "nexus-files"
+version = "0.1.0"
+description = "A modern, customizable file manager"
+authors = ["Nexus Files"]
+edition = "2021"
+
+[lib]
+name = "nexus_files_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+open = "5.3"
+winreg = "0.52"
+trash = "5"
+notify = "6"
+fs2 = "0.4"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

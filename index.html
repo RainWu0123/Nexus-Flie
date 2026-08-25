@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus Files</title>
+  <meta name="description" content="A modern, customizable desktop file manager">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/src/styles/index.css">
+  <link rel="stylesheet" href="/src/styles/sidebar.css">
+  <link rel="stylesheet" href="/src/styles/tabs.css">
+  <link rel="stylesheet" href="/src/styles/toolbar.css">
+  <link rel="stylesheet" href="/src/styles/file-list.css">
+  <link rel="stylesheet" href="/src/styles/command-palette.css">
+  <link rel="stylesheet" href="/src/styles/preview-panel.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ─── Top Level Chrome: Windows 11 Integrated Titlebar & Tabs ─── -->
+    <header id="titlebar" data-tauri-drag-region>
+      <div id="tab-bar" data-tauri-drag-region>
+        <!-- Rendered by tabs.js -->
+      </div>
+      <div class="titlebar-drag-spacer" data-tauri-drag-region></div>
+      <div class="window-controls">
+        <button class="window-control-btn" id="win-min" title="最小化" tabindex="-1">
+          <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+        </button>
+        <button class="window-control-btn" id="win-max" title="最大化" tabindex="-1">
+          <svg class="win-icon-max" width="10" height="10" viewBox="0 0 10 10"><rect width="9" height="9" x="0.5" y="0.5" fill="none" stroke="currentColor"/></svg>
+          <svg class="win-icon-restore" width="10" height="10" viewBox="0 0 10 10" style="display:none"><path d="M2.5 2.5v-2h7v7h-2M0.5 2.5h7v7h-7z" fill="none" stroke="currentColor"/></svg>
+        </button>
+        <button class="window-control-btn window-control-close" id="win-close" title="關閉" tabindex="-1">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="toolbar">
+      <!-- Rendered by toolbar.js -->
+    </div>
+
+    <!-- ─── Main Workspace: Sidebar (left) + Panes (right) ──────── -->
+    <div id="main-container">
+
+      <!-- Sidebar -->
+      <aside id="sidebar">
+        <!-- Rendered by sidebar.js -->
+      </aside>
+
+      <!-- Resize Handle -->
+      <div id="sidebar-resize" class="resize-handle"></div>
+
+      <!-- Content Area -->
+      <main id="content-area">
+        <div id="content-body">
+          <div id="panes">
+            <div id="file-list-container" class="pane pane-primary">
+              <div class="file-list-loading">
+                <div class="spinner"></div>
+                <span>Loading…</span>
+              </div>
+            </div>
+            <div id="pane-divider" class="resize-handle dual-only"></div>
+            <div id="file-list-secondary" class="pane pane-secondary dual-only">
+              <div class="pane-path mono" id="secondary-path-label"></div>
+              <div id="secondary-list" class="secondary-list"></div>
+            </div>
+          </div>
+
+          <!-- Preview Panel -->
+          <aside id="preview-panel">
+            <!-- Rendered by preview-panel.js -->
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <!-- ─── Status Bar ────────────────────────────────────────── -->
+    <footer id="status-bar">
+      <div class="status-left">
+        <span id="status-item-count"></span>
+        <span class="status-divider" id="status-bar-divider" style="display:none">|</span>
+        <span id="status-selection"></span>
+      </div>
+      <div class="status-right">
+        <button class="status-view-btn" id="status-btn-details" title="詳細資料">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </button>
+        <button class="status-view-btn" id="status-btn-grid" title="圖示">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </button>
+      </div>
+    </footer>
+
+    <!-- ─── Command Palette Overlay ───────────────────────────── -->
+    <div id="command-palette-overlay" class="hidden">
+      <div id="command-palette">
+        <div class="cp-search">
+          <svg class="icon icon-lg" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            id="cp-input"
+            placeholder="Type a command or search…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <div id="cp-results">
+          <!-- Rendered by command-palette.js -->
+        </div>
+        <div class="cp-footer">
+          <span><kbd>↑↓</kbd> Navigate</span>
+          <span><kbd>↵</kbd> Execute</span>
+          <span><kbd>Esc</kbd> Close</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Entry -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,438 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Nexus Files — Global Design System
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Custom Properties (Dark theme default) ─────────────────── */
+:root {
+  /* Windows 11 Fluent Accent — System Blue */
+  --accent-h: 200;
+  --accent-s: 100%;
+  --accent-l: 60%;
+  --accent-rgb: 96, 205, 255;
+  --accent: #60cdff;
+  --accent-hover: #78d5ff;
+  --accent-subtle: rgba(96, 205, 255, 0.12);
+  --accent-glow: rgba(96, 205, 255, 0.25);
+  --accent-ring: 0 0 0 2px rgba(96, 205, 255, 0.4);
+
+  /* Typography — Windows 11 Native */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+  --fs-xs: 0.75rem;       /* 12px */
+  --fs-sm: 0.8125rem;     /* 13px */
+  --fs-base: 0.875rem;    /* 14px */
+  --fs-md: 0.9375rem;
+  --fs-lg: 1.0625rem;
+  --fs-xl: 1.1875rem;
+  --lh-tight: 1.25;
+  --tracking-label: 0.02em;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius — Windows 11 Fluent */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 999px;
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --duration-fast: 80ms;
+  --duration-normal: 150ms;
+  --duration-slow: 250ms;
+
+  /* Sidebar */
+  --sidebar-width: 240px;
+  --sidebar-min: 180px;
+  --sidebar-max: 400px;
+  --row-height: 32px;
+
+  /* Z-index layers */
+  --z-base: 1;
+  --z-sidebar: 10;
+  --z-toolbar: 20;
+  --z-flyout: 80;
+  --z-overlay: 100;
+  --z-command-palette: 200;
+}
+
+/* ── Dark Theme (Windows 11 File Explorer Dark) ─────────────────── */
+[data-theme="dark"] {
+  --bg-app: #202020;
+  --bg-primary: #191919;      /* Windows 11 Explorer main background */
+  --bg-secondary: #202020;    /* Sidebar & header background */
+  --bg-tertiary: #282828;     /* Control surface */
+  --bg-elevated: #2c2c2c;     /* Menus, flyouts, address bar */
+  --bg-sidebar: #202020;
+  --bg-hover: rgba(255, 255, 255, 0.048);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-selected: rgba(255, 255, 255, 0.085);
+  --bg-row-alt: transparent;
+
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+  --text-accent: #60cdff;
+
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-focus: #60cdff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 16px rgba(96, 205, 255, 0.25);
+
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+
+  color-scheme: dark;
+}
+
+/* ── Light Theme ────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-app: #f3f3f3;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #ebebeb;
+  --bg-elevated: #ffffff;
+  --bg-sidebar: #f3f3f3;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.07);
+  --bg-selected: rgba(0, 120, 212, 0.1);
+  --bg-row-alt: transparent;
+
+  --text-primary: #1f1f1f;
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --text-accent: #0078d4;
+
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.04);
+  --border-focus: #0078d4;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 16px rgba(0, 120, 212, 0.2);
+
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+
+  color-scheme: light;
+}
+
+/* ── Reset & Base ───────────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 100px;
+  transition: background var(--duration-fast);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ── App Shell Layout ───────────────────────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+body.is-window-maximized #app {
+  border: none;
+  border-radius: 0;
+}
+
+#main-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+#content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-primary);
+}
+
+#content-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#panes {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pane-secondary {
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.pane-path {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondary-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Dual pane: hide secondary by default */
+.dual-only {
+  display: none;
+}
+#content-area.dual-pane .pane-secondary.dual-only {
+  display: flex;
+}
+#content-area.dual-pane #pane-divider.dual-only {
+  display: block;
+  width: 3px;
+  flex-shrink: 0;
+}
+#content-area.dual-pane .pane-primary,
+#content-area.dual-pane .pane-secondary {
+  flex: 1 1 50%;
+}
+.secondary-list.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+
+/* ── Status Bar (Windows 11) ─────────────────────────────────────── */
+#status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 var(--space-3);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-divider {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.status-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.status-view-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.status-view-btn.active {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+}
+
+/* ── Utility ────────────────────────────────────────────────────── */
+.hidden { display: none !important; }
+.mono { font-family: var(--font-mono); }
+
+button, input {
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ── Icon helper ────────────────────────────────────────────────── */
+.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-sm { width: 16px; height: 16px; }
+.icon-lg { width: 22px; height: 22px; }
+
+/* ── Resize Handle ──────────────────────────────────────────────── */
+.resize-handle {
+  width: 3px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: var(--z-sidebar);
+  flex-shrink: 0;
+  transition: background var(--duration-fast);
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: var(--accent);
+}
+
+/* ── Loading spinner ────────────────────────────────────────────── */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Fade-in animation (opacity only — transform breaks HTML5 drag in WebView2) ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn var(--duration-normal) var(--ease-out) both;
+}
+
+/* ── Toast (lean, single node) ──────────────────────────────────── */
+#nexus-toast-host {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 99999;
+  max-width: min(420px, 90vw);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 450;
+  color: #fff;
+  background: #2c2c2c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+#nexus-toast-host.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+#nexus-toast-host[data-type="success"] { background: #1b4332; border-color: rgba(74, 222, 128, 0.3); }
+#nexus-toast-host[data-type="error"] { background: #450a0a; border-color: rgba(248, 113, 113, 0.3); }
+#nexus-toast-host[data-type="info"] { background: #2c2c2c; border-color: rgba(96, 205, 255, 0.3); }

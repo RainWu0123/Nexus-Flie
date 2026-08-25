@@ -1,0 +1,222 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Preview Panel — Image Preview & File Info
+   ═══════════════════════════════════════════════════════════════════ */
+
+#preview-panel {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  transition: width 250ms var(--ease-out), min-width 250ms var(--ease-out);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#preview-panel.open {
+  width: 280px;
+  min-width: 280px;
+}
+
+/* ── Header ────────────────────────────────────────────────────── */
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  flex-shrink: 0;
+}
+
+.preview-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.preview-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+
+.preview-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Image Container ───────────────────────────────────────────── */
+.preview-image-container {
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  max-height: 50vh;
+  flex-shrink: 0;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 45vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: transform 200ms var(--ease-out), box-shadow 200ms;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.preview-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--accent-subtle);
+}
+
+/* ── Loading / Error ───────────────────────────────────────────── */
+.preview-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 160px;
+}
+
+/* ── Text / Code Preview ───────────────────────────────────────── */
+.preview-text-wrap {
+  flex: 1;
+  min-height: 0;
+  margin: 0 16px;
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.preview-text {
+  flex: 1;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.preview-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 160px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+
+/* ── Empty State ───────────────────────────────────────────────── */
+.preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 100%;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.preview-empty-icon {
+  width: 40px;
+  height: 40px;
+  opacity: 0.3;
+}
+
+/* ── File Info / Meta ──────────────────────────────────────────── */
+.preview-file-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+}
+
+.preview-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-big-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.preview-meta {
+  padding: 12px 16px 16px;
+  flex-shrink: 0;
+}
+
+.preview-filename {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.preview-detail {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── Grid Thumbnails ───────────────────────────────────────────── */
+.grid-thumbnail {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+  margin-bottom: var(--space-1);
+  transition: transform 150ms var(--ease-out);
+  background: var(--bg-tertiary);
+}
+
+#file-list-container.grid-view .grid-thumbnail {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+}
+
+#file-list-container.grid-view .file-row:hover .grid-thumbnail {
+  transform: scale(1.06);
+}
+
+/* ── Preview Toggle Button (in toolbar) ─────────────────────────── */
+.preview-toggle {
+  position: relative;
+}
+
+.preview-toggle.active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}

@@ -1,0 +1,208 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Windows 11 Native Integrated Titlebar & Tab Bar
+   ═══════════════════════════════════════════════════════════════════ */
+
+#titlebar {
+  display: flex;
+  align-items: stretch;
+  height: 40px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+#tab-bar {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  padding: 0 4px 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 1;
+  max-width: calc(100% - 150px);
+  gap: 3px;
+}
+
+#tab-bar::-webkit-scrollbar { height: 0; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 96px;
+  max-width: 200px;
+  padding: 0 8px 0 12px;
+  background: transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  position: relative;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast);
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+}
+
+.tab:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  border-bottom: 1px solid var(--bg-primary);
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.tab-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+  width: 14px;
+  height: 14px;
+}
+
+.tab.active .tab-icon {
+  opacity: 1;
+  color: var(--text-accent);
+}
+
+.tab-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.tab-close {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: all var(--duration-fast);
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 0.6;
+}
+
+.tab-close:hover {
+  opacity: 1 !important;
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.tab.pinned .tab-close { display: none; }
+.tab.pinned {
+  min-width: unset;
+  max-width: unset;
+  padding: 0 var(--space-2);
+}
+
+.tab.dragging {
+  opacity: 0.5;
+}
+
+.tab-new {
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  margin-bottom: 2px;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tab-new:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Drag Spacer */
+.titlebar-drag-spacer {
+  flex: 1;
+  height: 100%;
+  min-width: 24px;
+  cursor: default;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Windows 11 Native Caption Buttons (Minimize, Maximize, Close)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  margin-left: auto;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-secondary);
+  cursor: default;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+  margin: 0;
+}
+
+.window-control-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.window-control-btn:active {
+  background: var(--bg-active);
+}
+
+.window-control-close:hover {
+  background: #e81123 !important;
+  color: #ffffff !important;
+}
+
+.window-control-close:active {
+  background: #b3101d !important;
+  color: #ffffff !important;
+}
+
+.window-control-btn svg {
+  pointer-events: none;
+}

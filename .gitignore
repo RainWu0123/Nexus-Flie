@@ -1,0 +1,13 @@
+﻿# Node & Build
+node_modules/
+dist/
+.vite/
+
+# Tauri & Rust
+src-tauri/target/
+Cargo.lock
+
+# OS & Logs
+*.log
+.DS_Store
+Thumbs.db
