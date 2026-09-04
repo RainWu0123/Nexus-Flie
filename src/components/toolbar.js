@@ -5,14 +5,17 @@
 import store from '../store/store.js';
 import {
   navigateBack, navigateForward, navigateUp, navigateTo, refreshCurrent,
-  createFolder, createFile, openTerminal, deletePath, executeAddressCommand
+  createFolder, createFile, openTerminal, openTerminalAsAdmin, deletePath, executeAddressCommand,
+  setAsDefaultFileManager, restoreDefaultFileManager
 } from '../utils/tauri-bridge.js';
-import { icon, ICONS } from '../utils/helpers.js';
+import { icon, ICONS, getTagInfo } from '../utils/helpers.js';
 import { t, onLocaleChange } from '../i18n/index.js';
 import { togglePreviewPanel } from './preview-panel.js';
 import { startRenameSelected, getFilteredFiles } from './file-list.js';
 import { cutSelection, copySelection, pasteClipboard } from '../utils/clipboard-actions.js';
 import { toast } from '../utils/toast.js';
+import { showPromptDialog } from '../utils/modal.js';
+import { undoManager } from '../utils/undo-manager.js';
 
 let isEditing = false;
 let activeDropdown = null;
@@ -229,10 +232,15 @@ function renderToolbar(toolbar) {
         action: async () => {
           const { currentPath } = store.getState();
           if (!currentPath || currentPath.startsWith('nexus://')) return;
-          const name = prompt(t('context.newFolderPrompt'), t('context.newFolderDefault'));
+          const name = await showPromptDialog({
+            title: t('toolbar.newFolder') || '新增資料夾',
+            message: t('context.newFolderPrompt') || '請輸入資料夾名稱：',
+            defaultValue: t('context.newFolderDefault') || '新增資料夾',
+          });
           if (name) {
             try {
-              await createFolder(currentPath, name);
+              const createdPath = await createFolder(currentPath, name);
+              undoManager.recordCreate(createdPath || `${currentPath}\\${name}`, name);
               await refreshCurrent();
             } catch (err) { toast(String(err), 'error'); }
           }
@@ -244,10 +252,15 @@ function renderToolbar(toolbar) {
         action: async () => {
           const { currentPath } = store.getState();
           if (!currentPath || currentPath.startsWith('nexus://')) return;
-          const name = prompt(t('context.newFilePrompt'), t('context.newFileDefault'));
+          const name = await showPromptDialog({
+            title: t('toolbar.newTextDoc') || '新增文字文件',
+            message: t('context.newFilePrompt') || '請輸入檔案名稱：',
+            defaultValue: t('context.newFileDefault') || '新增文字文件.txt',
+          });
           if (name) {
             try {
-              await createFile(currentPath, name);
+              const createdPath = await createFile(currentPath, name);
+              undoManager.recordCreate(createdPath || `${currentPath}\\${name}`, name);
               await refreshCurrent();
             } catch (err) { toast(String(err), 'error'); }
           }
@@ -259,14 +272,18 @@ function renderToolbar(toolbar) {
 
   cmdRow.appendChild(createDivider());
 
-  // Action buttons: Cut, Copy, Paste, Rename, Delete
+  // Action buttons: Cut, Copy, Paste, Undo, Rename, Delete
   const cutBtn = createRibbonIconBtn('btn-cut', ICONS.scissors, t('toolbar.cut'), () => cutSelection());
   const copyBtn = createRibbonIconBtn('btn-copy', ICONS.copy, t('toolbar.copy'), () => copySelection());
   const pasteBtn = createRibbonIconBtn('btn-paste', ICONS.paste, t('toolbar.paste'), () => pasteClipboard());
+  const undoBtn = createRibbonIconBtn('btn-undo', ICONS.undo, t('toolbar.undo') || '復原 (Ctrl+Z)', async () => {
+    await undoManager.undo();
+    await refreshCurrent();
+  });
   const renameBtn = createRibbonIconBtn('btn-rename', ICONS.edit, t('toolbar.rename'), () => startRenameSelected());
   const deleteBtn = createRibbonIconBtn('btn-delete', ICONS.trash, t('toolbar.delete'), () => deleteSelectedItems());
 
-  cmdRow.append(cutBtn, copyBtn, pasteBtn, renameBtn, deleteBtn);
+  cmdRow.append(cutBtn, copyBtn, pasteBtn, undoBtn, renameBtn, deleteBtn);
 
   cmdRow.appendChild(createDivider());
 
@@ -348,12 +365,42 @@ function renderToolbar(toolbar) {
         action: () => { if (currentPath) openTerminal(currentPath); }
       },
       {
+        label: t('toolbar.openTerminalAsAdmin'),
+        icon: ICONS.shield,
+        action: () => { if (currentPath) openTerminalAsAdmin(currentPath); }
+      },
+      {
         label: t('cp.cmd.toggleDualPane'),
         checked: !!isDualPane,
         action: () => {
           const next = !store.get('isDualPane');
           store.setState({ isDualPane: next });
           document.getElementById('content-area')?.classList.toggle('dual-pane', next);
+        }
+      },
+      { divider: true },
+      {
+        label: t('cp.cmd.setDefaultFileManager'),
+        icon: ICONS.folder,
+        action: async () => {
+          try {
+            await setAsDefaultFileManager();
+            toast(t('cp.msg.setDefaultSuccess'), 'success');
+          } catch (err) {
+            toast(t('cp.msg.setDefaultFailed') + ': ' + err, 'error');
+          }
+        }
+      },
+      {
+        label: t('cp.cmd.restoreDefaultFileManager'),
+        icon: ICONS.refresh,
+        action: async () => {
+          try {
+            await restoreDefaultFileManager();
+            toast(t('cp.msg.restoreDefaultSuccess'), 'success');
+          } catch (err) {
+            toast(t('cp.msg.restoreDefaultFailed') + ': ' + err, 'error');
+          }
         }
       }
     ]);
@@ -406,19 +453,16 @@ function updateSearchInput() {
   }
 }
 
-async function deleteSelectedItems() {
+export async function deleteSelectedItems() {
   const { selectedFiles } = store.getState();
   if (!selectedFiles.size) return;
   const paths = [...selectedFiles];
-  const name = paths.length === 1
-    ? (paths[0].split(/[/\\]/).pop() || paths[0])
-    : `${paths.length} 個項目`;
-  if (!confirm(t('context.deleteConfirm', { name }))) return;
   try {
     for (const p of paths) await deletePath(p);
+    undoManager.recordDelete(paths);
     store.setState({ selectedFiles: new Set() });
     await refreshCurrent();
-    toast(t('context.delete'), 'success');
+    toast(t('context.delete'), 'info');
   } catch (err) {
     toast(t('context.deleteFailed') + ': ' + err, 'error');
   }
@@ -534,13 +578,38 @@ function renderBreadcrumb() {
   if (!bc) return;
   const { currentPath } = store.getState();
   bc.innerHTML = '';
-  if (!currentPath) return;
+  if (currentPath === 'nexus://this-pc') {
+    const seg = document.createElement('button');
+    seg.className = 'breadcrumb-segment';
+    seg.style.display = 'inline-flex';
+    seg.style.alignItems = 'center';
+    seg.style.gap = '6px';
+    seg.appendChild(icon(ICONS.desktop, 'icon-sm text-accent'));
+    const txt = document.createElement('span');
+    txt.textContent = t('sidebar.thisPc') || '本機';
+    seg.appendChild(txt);
+    bc.appendChild(seg);
+    return;
+  }
 
   if (currentPath.startsWith('nexus://tag/')) {
     const tagId = currentPath.replace('nexus://tag/', '');
+    const info = getTagInfo(tagId);
     const seg = document.createElement('button');
     seg.className = 'breadcrumb-segment';
-    seg.textContent = t(tagId) || tagId;
+    seg.style.display = 'inline-flex';
+    seg.style.alignItems = 'center';
+    seg.style.gap = '6px';
+
+    const dot = document.createElement('span');
+    dot.className = 'tag-dot';
+    dot.style.background = info.color;
+    dot.style.setProperty('--tag-glow', info.glow);
+
+    const txt = document.createElement('span');
+    txt.textContent = t(info.labelKey) || tagId;
+
+    seg.append(dot, txt);
     bc.appendChild(seg);
     return;
   }

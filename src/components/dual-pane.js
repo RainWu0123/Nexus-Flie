@@ -4,8 +4,8 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import store from '../store/store.js';
-import { navigateTo, movePath, refreshCurrent } from '../utils/tauri-bridge.js';
 import { formatFileSize, fileIconEl, icon, ICONS, isArchiveFile } from '../utils/helpers.js';
+import { toast } from '../utils/toast.js';
 import { t } from '../i18n/index.js';
 
 let secondaryPath = '';
@@ -55,7 +55,7 @@ export function initDualPane() {
       await loadSecondary(secondaryPath);
     } catch (err) {
       console.error(err);
-      alert(String(err));
+      toast(String(err), 'error');
     }
   });
 
@@ -172,7 +172,7 @@ function renderSecondary() {
           await refreshCurrent();
         } catch (err) {
           console.error(err);
-          alert(String(err));
+          toast(String(err), 'error');
         }
       });
     }
@@ -192,7 +192,7 @@ function renderSecondary() {
     row.appendChild(sizeCell);
 
     row.addEventListener('dblclick', async () => {
-      if (file.isDir || isArchiveFile(file.name) || file.path.startsWith('archive://') || file.path.startsWith('zip://')) {
+      if (file.isDir || isArchiveFile(file.name)) {
         await loadSecondary(file.path);
       } else {
         await invoke('open_file', { path: file.path });

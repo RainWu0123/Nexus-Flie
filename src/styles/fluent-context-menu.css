@@ -1,0 +1,202 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Nexus Files — Windows 11 Fluent Acrylic Context Menu
+   Authentic Mica / Acrylic frosted glass, command bar, & smooth submenus
+   ═══════════════════════════════════════════════════════════════════ */
+
+.fluent-context-menu {
+  position: fixed;
+  z-index: 100000;
+  min-width: 250px;
+  max-width: 330px;
+  background: rgba(38, 38, 38, 0.88);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 
+    0 16px 40px -4px rgba(0, 0, 0, 0.55),
+    0 2px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: #f3f3f3;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  user-select: none;
+  animation: fluentMenuPop 80ms cubic-bezier(0, 0, 0.1, 1) both;
+  transform-origin: top left;
+}
+
+[data-theme="light"] .fluent-context-menu {
+  background: rgba(246, 246, 246, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 
+    0 16px 40px -4px rgba(0, 0, 0, 0.18),
+    0 2px 10px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: #1a1a1a;
+}
+
+@keyframes fluentMenuPop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── Top Command Bar (Windows 11 Signature) ─────────────────────── */
+.fluent-cmd-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 2px 4px 4px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+  gap: 2px;
+}
+
+[data-theme="light"] .fluent-cmd-bar {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.fluent-cmd-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 32px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 60ms ease, transform 60ms ease;
+  position: relative;
+}
+
+.fluent-cmd-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fluent-cmd-btn:active {
+  transform: scale(0.94);
+}
+
+[data-theme="light"] .fluent-cmd-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.fluent-cmd-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+}
+
+/* ── Menu Items ─────────────────────────────────────────────────── */
+.fluent-item {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 50ms ease;
+  gap: 9px;
+  font-size: 12.5px;
+  position: relative;
+}
+
+.fluent-item:hover,
+.fluent-item.highlighted,
+.fluent-item.has-submenu-active {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+[data-theme="light"] .fluent-item:hover,
+[data-theme="light"] .fluent-item.highlighted,
+[data-theme="light"] .fluent-item.has-submenu-active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.fluent-item-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.fluent-item-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+}
+
+.fluent-item-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fluent-item-shortcut {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-left: 12px;
+  font-family: var(--font-sans);
+}
+
+.fluent-item-arrow {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fluent-item-arrow svg {
+  width: 10px;
+  height: 10px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+}
+
+/* ── Separators ─────────────────────────────────────────────────── */
+.fluent-sep {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 3px 6px;
+}
+
+[data-theme="light"] .fluent-sep {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* ── Tag Checkmark & Color Dots ─────────────────────────────────── */
+.fluent-tag-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.fluent-check {
+  font-size: 11px;
+  font-weight: bold;
+  width: 14px;
+  text-align: center;
+  color: var(--accent);
+}

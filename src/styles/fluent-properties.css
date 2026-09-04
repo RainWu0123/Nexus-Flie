@@ -1,0 +1,255 @@
+/**
+ * Nexus Files — Windows 11 Fluent Properties Dialog Styles
+ * Authentic replication of Windows File Explorer properties window with Mica / Acrylic frosted glass.
+ */
+
+.fluent-prop-card {
+  width: 440px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-card, #202020);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="light"] .fluent-prop-card {
+  background: rgba(248, 248, 248, 0.94);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* Dialog Titlebar */
+.prop-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.prop-titlebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-close-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary, #a1a1aa);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.prop-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #fff);
+}
+
+.prop-close-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+html[data-theme="light"] .prop-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+
+/* Tab Bar */
+.prop-tabbar {
+  display: flex;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  gap: 16px;
+}
+
+.prop-tab-item {
+  padding: 8px 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--accent, #60a5fa);
+  border-bottom: 2px solid var(--accent, #60a5fa);
+  cursor: default;
+}
+
+/* Content Body */
+.prop-content {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header Area (Icon + Name) */
+.prop-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.prop-icon-wrap {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.prop-icon-wrap svg,
+.prop-icon-wrap .file-icon {
+  width: 38px;
+  height: 38px;
+}
+
+.prop-name-box {
+  flex: 1;
+  min-width: 0;
+}
+
+.prop-filename {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  word-break: break-all;
+  line-height: 1.35;
+}
+
+/* Sections & Separators */
+.prop-divider {
+  height: 1px;
+  background: var(--border-color, rgba(255, 255, 255, 0.08));
+  margin: 2px 0;
+}
+
+.prop-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prop-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.prop-label {
+  color: var(--text-secondary, #a1a1aa);
+  font-weight: 450;
+  text-align: right;
+  padding-right: 4px;
+}
+
+html[data-theme="light"] .prop-label {
+  color: #616161;
+}
+
+.prop-val {
+  color: var(--text-primary, #fff);
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prop-val-interactive {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.prop-inline-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  color: var(--text-primary, #fff);
+  cursor: pointer;
+  transition: background 120ms ease;
+  white-space: nowrap;
+}
+
+.prop-inline-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+html[data-theme="light"] .prop-inline-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1a1a1a;
+}
+html[data-theme="light"] .prop-inline-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Attributes Row */
+.prop-attrs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.prop-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-primary, #fff);
+  cursor: pointer;
+  user-select: none;
+}
+
+.prop-checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent, #60a5fa);
+  width: 14px;
+  height: 14px;
+}
+
+/* Footer Actions */
+.prop-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: rgba(0, 0, 0, 0.15);
+}
+
+html[data-theme="light"] .prop-actions {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.prop-actions-right {
+  display: flex;
+  gap: 8px;
+}

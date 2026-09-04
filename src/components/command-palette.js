@@ -2,16 +2,32 @@
  * Nexus Files — Command Palette (Ctrl+K)
  */
 import store from '../store/store.js';
-import { navigateTo, getHomeDir, openFile } from '../utils/tauri-bridge.js';
+import { navigateTo, getHomeDir, openFile, setAsDefaultFileManager, restoreDefaultFileManager, trimMemory } from '../utils/tauri-bridge.js';
 import { fuzzyMatch, icon, ICONS, fileIconEl } from '../utils/helpers.js';
 import { t, setLocale, onLocaleChange } from '../i18n/index.js';
 import { createTab, reopenClosedTab } from './tabs.js';
 import { getFilteredFiles, openFilterBar } from './file-list.js';
+import { toast } from '../utils/toast.js';
+import { showPromptDialog } from '../utils/modal.js';
+import { undoManager } from '../utils/undo-manager.js';
 
 function getCommands() {
   const folders = store.get('knownFolders') || {};
 
   return [
+    {
+      id: 'undo', label: t('undo.undo') || '復原', icon: ICONS.back || ICONS.chevronLeft,
+      shortcut: 'Ctrl+Z', group: t('cp.group.files') || '檔案操作',
+      action: () => undoManager.undo(),
+    },
+    {
+      id: 'trim-memory', label: t('cp.cmd.trimMemory') || '釋放記憶體 (Trim Memory)', icon: ICONS.refresh,
+      group: t('cp.group.system') || '系統與效能',
+      action: async () => {
+        await trimMemory();
+        toast(t('cp.msg.memoryTrimmed') || '已釋放未使用之記憶體', 'success');
+      },
+    },
     {
       id: 'new-tab', label: t('cp.cmd.newTab'), icon: ICONS.plus,
       shortcut: 'Ctrl+T', group: t('cp.group.tabs'),
@@ -106,8 +122,12 @@ function getCommands() {
     {
       id: 'go-path', label: t('cp.cmd.goPath'), icon: ICONS.chevronRight,
       group: t('cp.group.navigate'),
-      action: () => {
-        const path = prompt(t('cp.cmd.goPath'));
+      action: async () => {
+        const path = await showPromptDialog({
+          title: t('cp.cmd.goPath') || '前往指定路徑',
+          message: '請輸入要前往的路徑：',
+          defaultValue: 'C:\\',
+        });
         if (path) navigateTo(path);
       },
     },
@@ -119,6 +139,34 @@ function getCommands() {
       group: t('cp.group.language'), action: () => { setLocale('zh-CN'); store.setState({ locale: 'zh-CN' }); } },
     { id: 'lang-ja', label: t('cp.cmd.langJa'), icon: ICONS.command,
       group: t('cp.group.language'), action: () => { setLocale('ja'); store.setState({ locale: 'ja' }); } },
+    {
+      id: 'set-default-file-manager',
+      label: t('cp.cmd.setDefaultFileManager'),
+      icon: ICONS.folder,
+      group: t('cp.group.system'),
+      action: async () => {
+        try {
+          await setAsDefaultFileManager();
+          toast(t('cp.msg.setDefaultSuccess'), 'success');
+        } catch (err) {
+          toast(t('cp.msg.setDefaultFailed') + ': ' + err, 'error');
+        }
+      },
+    },
+    {
+      id: 'restore-default-file-manager',
+      label: t('cp.cmd.restoreDefaultFileManager'),
+      icon: ICONS.refresh,
+      group: t('cp.group.system'),
+      action: async () => {
+        try {
+          await restoreDefaultFileManager();
+          toast(t('cp.msg.restoreDefaultSuccess'), 'success');
+        } catch (err) {
+          toast(t('cp.msg.restoreDefaultFailed') + ': ' + err, 'error');
+        }
+      },
+    },
   ];
 }
 
@@ -130,9 +178,12 @@ export function initCommandPalette() {
   if (!overlay || !input) return;
 
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    const mod = e.ctrlKey || e.metaKey;
+    const isCmdPaletteKey = (mod && (e.key === 'k' || e.key === 'K' || e.key === 'p' || e.key === 'P')) || e.key === 'F1';
+    if (isCmdPaletteKey) {
       e.preventDefault();
       toggle();
+      return;
     }
     if (e.key === 'Escape' && store.get('commandPaletteOpen')) {
       e.preventDefault();

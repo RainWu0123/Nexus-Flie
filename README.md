@@ -88,6 +88,7 @@ src-tauri/           Rust FS commands (blocking work off async runtime)
 | `F2` | Inline rename |
 | `F5` | Refresh |
 | `Delete` | Move to Recycle Bin |
+| `Ctrl+Z` | Undo last action (Recycle Bin restore, revert rename/move) |
 
 ## Performance checklist (for contributors)
 

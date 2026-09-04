@@ -140,15 +140,49 @@ export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-/** Default tag definitions shared by sidebar + context menus */
+import store from '../store/store.js';
+
 export const DEFAULT_TAGS = [
-  { id: 'sidebar.tag.important', labelKey: 'sidebar.tag.important', color: '#ef4444' },
-  { id: 'sidebar.tag.work', labelKey: 'sidebar.tag.work', color: '#3b82f6' },
-  { id: 'sidebar.tag.personal', labelKey: 'sidebar.tag.personal', color: '#22c55e' },
-  { id: 'sidebar.tag.archive', labelKey: 'sidebar.tag.archive', color: '#f59e0b' },
+  { id: 'sidebar.tag.important', labelKey: 'sidebar.tag.important', color: '#f87171', bg: 'rgba(248, 113, 113, 0.12)', border: 'rgba(248, 113, 113, 0.25)' },
+  { id: 'sidebar.tag.work', labelKey: 'sidebar.tag.work', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.12)', border: 'rgba(96, 165, 250, 0.25)' },
+  { id: 'sidebar.tag.personal', labelKey: 'sidebar.tag.personal', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.25)' },
+  { id: 'sidebar.tag.archive', labelKey: 'sidebar.tag.archive', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.25)' },
+  { id: 'sidebar.tag.project', labelKey: 'sidebar.tag.project', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', border: 'rgba(192, 132, 252, 0.25)' },
+  { id: 'sidebar.tag.review', labelKey: 'sidebar.tag.review', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.12)', border: 'rgba(56, 189, 248, 0.25)' },
 ];
 
+export const TAG_MAP = new Map(DEFAULT_TAGS.map(t => [t.id, t]));
 export const TAG_COLORS = Object.fromEntries(DEFAULT_TAGS.map(t => [t.id, t.color]));
+
+const FALLBACK_TAG = Object.freeze({
+  id: '',
+  labelKey: '',
+  color: '#8b949e',
+  bg: 'rgba(139, 148, 158, 0.12)',
+  border: 'rgba(139, 148, 158, 0.25)',
+});
+
+/** Return all defined tags (custom + default) */
+export function getAllTags() {
+  return store.getTags(DEFAULT_TAGS);
+}
+
+/** Dynamic tag lookup */
+export function getTagInfo(tagId) {
+  const all = getAllTags();
+  const found = all.find(t => t.id === tagId);
+  if (found) return found;
+  return TAG_MAP.get(tagId) || { ...FALLBACK_TAG, id: tagId, name: tagId, labelKey: tagId };
+}
+
+/** Create a lightweight minimalist tag dot */
+export function createTagDot(tagId, extraClass = '') {
+  const info = getTagInfo(tagId);
+  const dot = document.createElement('span');
+  dot.className = `tag-dot ${extraClass}`.trim();
+  dot.style.setProperty('--tag-color', info.color);
+  return dot;
+}
 
 /**
  * Calculate Windows 11 time interval group key for a timestamp.

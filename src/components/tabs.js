@@ -2,7 +2,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import store from '../store/store.js';
 import { navigateTo, readDirectory } from '../utils/tauri-bridge.js';
-import { uid, icon, ICONS } from '../utils/helpers.js';
+import { uid, icon, ICONS, getTagInfo } from '../utils/helpers.js';
 import { t, onLocaleChange } from '../i18n/index.js';
 
 const MAX_CLOSED_STACK = 10;
@@ -28,7 +28,16 @@ function renderTabs() {
     el.className = `tab${tab.id === activeTabId ? ' active' : ''}${tab.isPinned ? ' pinned' : ''}`;
     el.dataset.tabId = tab.id;
     el.draggable = true;
-    el.appendChild(icon(ICONS.folder, 'icon-sm tab-icon'));
+
+    if (tab.path && tab.path.startsWith('nexus://tag/')) {
+      const tagId = tab.path.replace('nexus://tag/', '');
+      const info = getTagInfo(tagId);
+      const tagIco = icon(ICONS.tag, 'icon-sm tab-icon');
+      tagIco.style.color = info.color;
+      el.appendChild(tagIco);
+    } else {
+      el.appendChild(icon(ICONS.folder, 'icon-sm tab-icon'));
+    }
 
     const label = document.createElement('span');
     label.className = 'tab-label';
@@ -160,9 +169,13 @@ export function syncActiveTab(path) {
 
 function pathLabel(path) {
   if (!path) return t('tabs.newTab');
+  if (path === 'nexus://this-pc') {
+    return t('sidebar.thisPc') || '本機';
+  }
   if (path.startsWith('nexus://tag/')) {
     const id = path.replace('nexus://tag/', '');
-    return t(id) || id;
+    const info = getTagInfo(id);
+    return t(info.labelKey) || info.name || id;
   }
   const segments = path.replace(/\\/g, '/').split('/').filter(Boolean);
   return segments[segments.length - 1] || path;

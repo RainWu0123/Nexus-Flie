@@ -8,6 +8,25 @@ import { parentPath, isArchiveFile } from '../../utils/path.js';
 
 const MAX_TAB_HISTORY = 100;
 
+let dwellTimer = null;
+let currentDwellPath = null;
+let dwellStartTime = 0;
+
+function flushDwell() {
+  if (currentDwellPath && dwellStartTime) {
+    const elapsedSeconds = (Date.now() - dwellStartTime) / 1000;
+    if (elapsedSeconds >= 4) {
+      store.recordFolderVisit(currentDwellPath, Math.round(elapsedSeconds));
+    }
+  }
+  if (dwellTimer) {
+    clearTimeout(dwellTimer);
+    dwellTimer = null;
+  }
+  currentDwellPath = null;
+  dwellStartTime = 0;
+}
+
 export const NavigationEngine = {
   /**
    * Load directory or virtual tagged paths into store.
@@ -18,7 +37,14 @@ export const NavigationEngine = {
 
     try {
       let files;
-      if (path.startsWith('nexus://tag/')) {
+      if (path === 'nexus://this-pc') {
+        const [drives, knownFolders] = await Promise.all([
+          FileSystemGateway.getDrives(),
+          FileSystemGateway.getKnownFolders(),
+        ]);
+        store.setState({ drives, knownFolders, files: [], isLoading: false, currentPath: path, error: null });
+        return [];
+      } else if (path.startsWith('nexus://tag/')) {
         const tagId = path.split('nexus://tag/')[1];
         const fileTags = store.get('fileTags') || {};
         const taggedPaths = [];
@@ -50,8 +76,17 @@ export const NavigationEngine = {
       }
 
       store.setState({ files, isLoading: false, currentPath: path });
-      if (!path.startsWith('nexus://')) {
-        store.addRecentFolder(path);
+
+      // Windows-like Dwell Time:
+      // Flush previous directory if dwell was >= 4s
+      flushDwell();
+
+      if (!store.isExcludedFromRecent(path)) {
+        currentDwellPath = path;
+        dwellStartTime = Date.now();
+        dwellTimer = setTimeout(() => {
+          store.recordFolderVisit(path, 4);
+        }, 4000);
       }
       return files;
     } catch (err) {

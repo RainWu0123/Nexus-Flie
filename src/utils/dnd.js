@@ -4,9 +4,10 @@
  */
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import store from '../store/store.js';
-import { movePath, copyPath, refreshCurrent } from './tauri-bridge.js';
+import { movePath, copyPath, refreshCurrent, startNativeDrag } from './tauri-bridge.js';
 import { toast } from './toast.js';
 import { t } from '../i18n/index.js';
+import { getTagInfo } from './helpers.js';
 
 const THRESHOLD_PX = 5;
 
@@ -136,6 +137,13 @@ function startActive(e) {
       : t('dnd.dragItem', { name: drag.name })
   );
   console.log('[dnd] drag started', drag.paths);
+
+  // Trigger native OS Drag & Drop so user can drop to Windows Desktop / Explorer / other apps
+  if (drag.paths && drag.paths.length > 0) {
+    startNativeDrag(drag.paths).catch((err) => {
+      console.warn('[dnd] startNativeDrag error:', err);
+    });
+  }
 }
 
 function hitTest(x, y) {
@@ -164,7 +172,17 @@ function hitTest(x, y) {
 
   // Sidebar path (home, desktop, drives…)
   const nav = el.closest?.('.sidebar-item[data-path], .sidebar-drive[data-path]');
-  if (nav?.dataset.path && !nav.dataset.path.startsWith('nexus://')) {
+  if (nav?.dataset.path) {
+    if (nav.dataset.path.startsWith('nexus://tag/')) {
+      const tagId = nav.dataset.tagId || nav.dataset.path.replace('nexus://tag/', '');
+      nav.classList.add('drag-over');
+      drag.dropPath = tagId;
+      drag.dropKind = 'tag';
+      const tagInfo = getTagInfo(tagId);
+      const tagLabel = t(tagInfo.labelKey) || tagId;
+      status(`🏷️ ${tagLabel}`);
+      return;
+    }
     const dest = nav.dataset.path;
     if (canDropInto(dest)) {
       nav.classList.add('drag-over');
@@ -257,20 +275,39 @@ async function onUp(e) {
       await refreshCurrent();
       if (errs.length) {
         status(t('dnd.movedPartial', { ok, fail: errs.length }));
-        alert(t('dnd.moveFailed') + '\n' + errs.join('\n'));
+        toast(t('dnd.moveFailed') + ': ' + errs.join(', '), 'error');
       } else {
         status(ok ? t('dnd.moved', { count: ok }) : t('dnd.movedNone'));
       }
     } else if (dropKind === 'quickAccess' && isDir && paths[0]) {
       store.addCustomQuickAccess(name, paths[0]);
       status(t('dnd.qaAdded', { name }));
+    } else if (dropKind === 'tag' && dropPath) {
+      const tagId = dropPath;
+      const tagInfo = getTagInfo(tagId);
+      const tagLabel = t(tagInfo.labelKey) || tagId;
+      const fileTags = { ...(store.get('fileTags') || {}) };
+      let changed = 0;
+      for (const p of paths) {
+        if (!p) continue;
+        const current = fileTags[p] || [];
+        if (!current.includes(tagId)) {
+          fileTags[p] = [...current, tagId];
+          changed++;
+        }
+      }
+      if (changed > 0) {
+        store.setState({ fileTags });
+        toast(t('dnd.taggedFiles', { count: changed, tag: tagLabel }), 'success');
+      }
+      status(t('dnd.taggedFiles', { count: paths.length, tag: tagLabel }));
     } else {
       status(t('dnd.cancelHint'));
     }
   } catch (err) {
     console.error('[dnd]', err);
     status(t('dnd.moveFailed'));
-    alert(t('dnd.moveFailed') + ': ' + err);
+    toast(t('dnd.moveFailed') + ': ' + err, 'error');
   }
 }
 
@@ -321,15 +358,17 @@ function initExternalDnd() {
         const payload = event.payload;
         if (!payload) return;
 
+        const dpr = window.devicePixelRatio || 1;
+
         if (payload.type === 'over' || payload.type === 'hover') {
           const { x, y } = payload.position || { x: 0, y: 0 };
-          hitTestExternal(x, y);
+          hitTestExternal(x / dpr, y / dpr);
         } else if (payload.type === 'drop') {
           clearHl();
           const { paths, position } = payload;
           if (!paths || !paths.length) return;
           const { x, y } = position || { x: 0, y: 0 };
-          await handleExternalDrop(paths, x, y);
+          await handleExternalDrop(paths, x / dpr, y / dpr);
         } else if (payload.type === 'leave' || payload.type === 'cancel') {
           clearHl();
           status('');
@@ -376,6 +415,17 @@ function hitTestExternal(x, y) {
   const el = document.elementFromPoint(x, y);
   if (!el) return;
 
+  // 1. Tag target in sidebar
+  const tagEl = el.closest?.('.sidebar-tag-item[data-tag-id]');
+  if (tagEl?.dataset.tagId) {
+    tagEl.classList.add('drag-over');
+    const tagInfo = getTagInfo(tagEl.dataset.tagId);
+    const tagLabel = t(tagInfo.labelKey) || tagEl.dataset.tagId;
+    status(`釋放以為項目套用標籤：🏷️ ${tagLabel}`);
+    return;
+  }
+
+  // 2. Folder row in file list
   const folder = el.closest?.('.file-row.is-dir');
   if (folder?.dataset.path) {
     folder.classList.add('drag-over');
@@ -383,6 +433,7 @@ function hitTestExternal(x, y) {
     return;
   }
 
+  // 3. Navigation item in sidebar (Quick access, drive, folder)
   const nav = el.closest?.('.sidebar-item[data-path], .sidebar-drive[data-path]');
   if (nav?.dataset.path && !nav.dataset.path.startsWith('nexus://')) {
     nav.classList.add('drag-over');
@@ -390,6 +441,7 @@ function hitTestExternal(x, y) {
     return;
   }
 
+  // 4. Secondary dual-pane area
   const sec = el.closest?.('#file-list-secondary, .secondary-list');
   if (sec) {
     const secPath = store.get('secondaryPath');
@@ -400,6 +452,7 @@ function hitTestExternal(x, y) {
     }
   }
 
+  // 5. Active directory container
   const cur = store.get('currentPath');
   if (cur && !cur.startsWith('nexus://')) {
     const container = document.getElementById('file-list-container');
@@ -413,6 +466,32 @@ function hitTestExternal(x, y) {
 async function handleExternalDrop(paths, x, y) {
   clearHl();
   const el = document.elementFromPoint(x, y);
+
+  // 1. Tag target in sidebar
+  const tagEl = el?.closest?.('.sidebar-tag-item[data-tag-id]');
+  if (tagEl?.dataset.tagId) {
+    const tagId = tagEl.dataset.tagId;
+    const tagInfo = getTagInfo(tagId);
+    const tagLabel = t(tagInfo.labelKey) || tagId;
+    const fileTags = { ...(store.get('fileTags') || {}) };
+    let changed = 0;
+    for (const p of paths) {
+      const cur = fileTags[p] || [];
+      if (!cur.includes(tagId)) {
+        fileTags[p] = [...cur, tagId];
+        changed++;
+      }
+    }
+    if (changed > 0) {
+      store.setState({ fileTags });
+      status(`已為 ${paths.length} 個項目套用標籤：🏷️ ${tagLabel}`);
+      toast(`已套用標籤：${tagLabel}`, 'success');
+    } else {
+      toast(`項目已包含標籤：${tagLabel}`, 'info');
+    }
+    return;
+  }
+
   let dest = null;
 
   const folder = el?.closest?.('.file-row.is-dir');

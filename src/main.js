@@ -3,11 +3,11 @@
  * Lean boot: shell → i18n/theme → components → home list.
  */
 import store from './store/store.js';
-import { getHomeDir, getKnownFolders, navigateBack, navigateForward, navigateUp, refreshCurrent, deletePath, createFolder } from './utils/tauri-bridge.js';
+import { getHomeDir, getKnownFolders, getLaunchArgs, navigateBack, navigateForward, navigateUp, refreshCurrent, deletePath, createFolder, trimMemory } from './utils/tauri-bridge.js';
 import { initSidebar, updateSidebarHomePath } from './components/sidebar.js';
 import { initTabs, createTab, switchTab, syncActiveTab, closeTab, reopenClosedTab } from './components/tabs.js';
-import { initFileList, startRenameSelected, openFilterBar } from './components/file-list.js';
-import { initToolbar } from './components/toolbar.js';
+import { initFileList, startRenameSelected, openFilterBar, openPropertiesForSelection } from './components/file-list.js';
+import { initToolbar, deleteSelectedItems } from './components/toolbar.js';
 import { initCommandPalette } from './components/command-palette.js';
 import { initPreviewPanel } from './components/preview-panel.js';
 import { initDualPane } from './components/dual-pane.js';
@@ -15,7 +15,10 @@ import { initDnd } from './utils/dnd.js';
 import { initWatcher } from './utils/watcher.js';
 import { cutSelection, copySelection, pasteClipboard } from './utils/clipboard-actions.js';
 import { toast } from './utils/toast.js';
+import { showPromptDialog } from './utils/modal.js';
+import { undoManager } from './utils/undo-manager.js';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 
 import { registerLocale, setLocale, detectSystemLocale, t } from './i18n/index.js';
 import en from './i18n/locales/en.js';
@@ -53,10 +56,15 @@ function initPathSync() {
 async function promptNewFolder() {
   const { currentPath } = store.getState();
   if (!currentPath || currentPath.startsWith('nexus://')) return;
-  const name = prompt(t('context.newFolderPrompt'), t('context.newFolderDefault'));
+  const name = await showPromptDialog({
+    title: t('context.newFolder') || '新增資料夾',
+    message: t('context.newFolderPrompt') || '請輸入資料夾名稱：',
+    defaultValue: t('context.newFolderDefault') || '新增資料夾',
+  });
   if (!name) return;
   try {
-    await createFolder(currentPath, name);
+    const createdPath = await createFolder(currentPath, name);
+    undoManager.recordCreate(createdPath || `${currentPath}\\${name}`, name);
     await refreshCurrent();
   } catch (err) {
     toast(t('context.createFailed') + ': ' + err, 'error');
@@ -148,26 +156,15 @@ function initKeyboardShortcuts() {
       pasteClipboard();
       return;
     }
+    if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      undoManager.undo();
+      return;
+    }
 
     if (e.key === 'Delete') {
-      const { selectedFiles } = store.getState();
-      if (!selectedFiles.size) return;
       e.preventDefault();
-      const paths = [...selectedFiles];
-      const name = paths.length === 1
-        ? (paths[0].split(/[/\\]/).pop() || paths[0])
-        : `${paths.length}`;
-      if (!confirm(t('context.deleteConfirm', { name }))) return;
-      (async () => {
-        try {
-          for (const p of paths) await deletePath(p);
-          store.setState({ selectedFiles: new Set() });
-          await refreshCurrent();
-          toast(t('context.delete'), 'success');
-        } catch (err) {
-          toast(t('context.deleteFailed') + ': ' + err, 'error');
-        }
-      })();
+      deleteSelectedItems();
       return;
     }
 
@@ -180,6 +177,12 @@ function initKeyboardShortcuts() {
     if (e.key === 'F5') {
       e.preventDefault();
       refreshCurrent();
+      return;
+    }
+
+    if (e.altKey && e.key === 'Enter') {
+      e.preventDefault();
+      openPropertiesForSelection();
       return;
     }
   });
@@ -204,36 +207,86 @@ async function init() {
   initKeyboardShortcuts();
   initWatcher();
 
-  try {
-    const [homeDir, folders] = await Promise.all([getHomeDir(), getKnownFolders()]);
-    updateSidebarHomePath(homeDir, folders);
+  // Listen for external folder open requests via Single Instance
+  listen('single-instance-launch', (event) => {
+    const target = event.payload;
+    if (target?.folderPath) {
+      createTab(target.folderPath);
+      if (target.selectFile) {
+        setTimeout(() => {
+          store.setState({ selectedFiles: new Set([target.selectFile]) });
+        }, 150);
+      }
+    }
+  }).catch(() => {});
 
-    // Session restore: bring back last session's tabs (paths + histories).
+  // 1. Fast path: Restore session immediately so directory reading starts at tick 0
+  let sessionRestored = false;
+  try {
     if (store.restoreSession()) {
+      sessionRestored = true;
       const { tabs, activeTabId } = store.getState();
       const active = tabs.find(tb => tb.id === activeTabId) || tabs[0];
-      switchTab(active.id);
-    } else {
-      createTab(homeDir);
+      if (active) switchTab(active.id);
     }
   } catch (err) {
-    console.warn('Home fallback', err);
-    createTab('C:\\');
+    console.warn('Session restore error:', err);
   }
 
-  setTimeout(async () => {
+  // Reveal window on first frame once DOM is rendered — eliminates white flash
+  requestAnimationFrame(() => {
+    const win = getCurrentWindow();
+    win.show().then(() => {
+      win.setFocus().catch(() => {});
+    }).catch(() => {});
+  });
+
+  // 2. Fetch system paths and CLI arguments in parallel (non-blocking)
+  (async () => {
     try {
-      await getCurrentWindow().show();
-    } catch (e) {
-      console.warn('show window', e);
+      const [homeDir, folders, launchArgs] = await Promise.all([
+        getHomeDir().catch(() => 'C:\\'),
+        getKnownFolders().catch(() => ({})),
+        getLaunchArgs().catch(() => null),
+      ]);
+
+      updateSidebarHomePath(homeDir, folders);
+
+      if (launchArgs?.folderPath) {
+        createTab(launchArgs.folderPath);
+        if (launchArgs.selectFile) {
+          setTimeout(() => {
+            store.setState({ selectedFiles: new Set([launchArgs.selectFile]) });
+          }, 100);
+        }
+      } else if (!sessionRestored) {
+        createTab(homeDir || 'C:\\');
+      }
+    } catch (err) {
+      console.warn('System paths init error:', err);
+      if (!sessionRestored) createTab('C:\\');
     }
-  }, 50);
+  })();
 }
 
 window.addEventListener('error', (e) => {
   import('@tauri-apps/api/core').then((m) => {
     m.invoke('log_error', { msg: `[window.error] ${e.message}` }).catch(() => {});
   });
+});
+
+// Auto-trim working set memory when window is unfocused or hidden
+let trimTimer = null;
+function scheduleMemoryTrim(delay = 1500) {
+  if (trimTimer) clearTimeout(trimTimer);
+  trimTimer = setTimeout(() => {
+    trimMemory();
+  }, delay);
+}
+
+window.addEventListener('blur', () => scheduleMemoryTrim(1000));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) scheduleMemoryTrim(500);
 });
 
 if (document.readyState === 'loading') {

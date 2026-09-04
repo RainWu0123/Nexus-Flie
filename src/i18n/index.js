@@ -22,14 +22,22 @@ export function setLocale(code) {
 export function getLocale() { return currentLocale; }
 
 /**
- * Translate a key. Supports {param} interpolation.
+ * Translate a key. Supports {param} interpolation and fallback string.
  * @param {string} key
- * @param {Record<string, string|number>} params
+ * @param {Record<string, string|number>|string} [params]
+ * @param {string} [fallback]
  */
-export function t(key, params = {}) {
+export function t(key, params = {}, fallback = null) {
+  if (typeof params === 'string') {
+    fallback = params;
+    params = {};
+  }
   const dict = locales[currentLocale] || locales['en'] || {};
-  let text = dict[key] ?? key;
-  for (const [k, v] of Object.entries(params)) {
+  let text = dict[key];
+  if (text == null) {
+    text = fallback !== null ? fallback : key;
+  }
+  for (const [k, v] of Object.entries(params || {})) {
     text = text.replaceAll(`{${k}}`, String(v));
   }
   return text;

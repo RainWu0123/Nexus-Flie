@@ -318,6 +318,7 @@ body.is-marquee-selecting {
 }
 
 #file-list-container.grid-view .file-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: auto;
@@ -428,20 +429,131 @@ body.is-marquee-selecting {
 .file-icon.exe { color: #94a3b8; }
 .file-icon.default { color: var(--text-tertiary); }
 
+/* ── List View Inline Tags ───────────────────────────────────────── */
 .file-tags-inline {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.file-tags-inline .tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--tag-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--tag-border, transparent);
+  font-size: 11px;
+  font-weight: 450;
+  color: var(--text-secondary);
+  line-height: 1;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.file-tags-inline .tag-chip .tag-dot {
+  width: 5px;
+  height: 5px;
+}
+
+/* Cluster Chip for 3+ tags in list view */
+.file-tags-inline .tag-cluster-chip {
+  display: inline-flex;
+  align-items: center;
   gap: 3px;
-  margin-left: 2px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  user-select: none;
+  cursor: default;
+}
+
+.file-tags-inline .tag-cluster-chip .tag-dot {
+  width: 5px;
+  height: 5px;
+}
+
+/* ── Grid View Tags Badge ────────────────────────────────────────── */
+#file-list-container.grid-view .grid-tags-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 999px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+[data-theme="light"] #file-list-container.grid-view .grid-tags-badge {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+#file-list-container.grid-view .grid-tags-badge .tag-dot {
+  width: 5px;
+  height: 5px;
+}
+
+/* Tag View Header Banner */
+.tag-view-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin: 6px 12px 10px;
+  background: var(--tag-bg, var(--bg-tertiary));
+  border: 1px solid var(--tag-border, var(--border-color));
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
 
-.file-tags-inline .tag-dot,
-.tag-dot {
-  width: 7px;
-  height: 7px;
+.tag-view-header-badge {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tag-color, var(--accent));
+  color: #fff;
+  box-shadow: 0 0 10px var(--tag-glow, transparent);
   flex-shrink: 0;
+}
+
+.tag-view-header-badge .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.tag-view-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tag-view-header-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tag-view-header-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .grid-thumbnail {
@@ -610,3 +722,151 @@ html.is-dragging * {
 .secondary-list .file-type {
   display: none;
 }
+
+/* ── This PC Overview View ───────────────────────────────────────── */
+.this-pc-container {
+  padding: 18px 24px;
+  overflow-y: auto;
+  height: 100%;
+  width: 100%;
+}
+
+.this-pc-section {
+  margin-bottom: 26px;
+}
+
+.this-pc-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.this-pc-folders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.this-pc-folder-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast);
+}
+
+.this-pc-folder-card:hover {
+  background: var(--bg-hover);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.this-pc-folder-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.this-pc-folder-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.this-pc-drives-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.this-pc-drive-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast);
+  position: relative;
+}
+
+.this-pc-drive-card:hover {
+  background: var(--bg-hover);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.this-pc-drive-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.this-pc-drive-icon-wrap .icon {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+
+.this-pc-drive-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.this-pc-drive-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.this-pc-progress-bar {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 3px 0;
+}
+
+.this-pc-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, #60a5fa);
+  transition: width 300ms ease;
+}
+
+.this-pc-progress-fill.danger {
+  background: #ef4444 !important;
+}
+
+.this-pc-drive-capacity {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+

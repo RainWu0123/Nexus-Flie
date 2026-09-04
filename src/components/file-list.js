@@ -7,28 +7,32 @@ import store from '../store/store.js';
 import {
   navigateTo, refreshCurrent, navigateUp,
   openFile, deletePath, renamePath, createFolder, createFile,
-  calcFolderSize, openTerminal, revealInExplorer, emptyRecycleBin,
-  extractArchive, extractZip,
+  calcFolderSize, openTerminal, openTerminalAsAdmin, revealInExplorer, emptyRecycleBin,
+  extractArchive, extractZip, openFileAsAdmin,
+  getOpenWithApps, openFileWith, showOpenWithDialog, pickExecutableFile,
 } from '../utils/tauri-bridge.js';
 import {
   formatFileSize, formatDate, getFileTypeDescription, getDateGroupKey, fileIconEl, icon, ICONS,
-  DEFAULT_TAGS, TAG_COLORS, parentPath, joinPath, isArchiveFile, stripArchiveExt,
+  DEFAULT_TAGS, TAG_COLORS, getTagInfo, getAllTags, createTagDot, parentPath, joinPath, isArchiveFile, stripArchiveExt,
 } from '../utils/helpers.js';
 import { t, onLocaleChange } from '../i18n/index.js';
-import { loadGridThumbnails } from './preview-panel.js';
+import { loadGridThumbnails, disconnectThumbnailObserver } from './preview-panel.js';
 import { isDragging } from '../utils/dnd.js';
 import { cutSelection, copySelection, pasteClipboard } from '../utils/clipboard-actions.js';
 import { toast, statusMsg } from '../utils/toast.js';
-import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu';
+import { showConfirmDialog, showPromptDialog, showTagDialog } from '../utils/modal.js';
+import { undoManager } from '../utils/undo-manager.js';
+import { showFluentContextMenu } from './fluent-context-menu.js';
+import { showPropertiesDialog } from './properties-dialog.js';
 
 const ROW_HEIGHT = 36;
 /** Virtualize earlier — large dirs must stay cheap (PHILOSOPHY) */
 const VIRTUAL_THRESHOLD = 80;
 const OVERSCAN = 10;
-/** Grid renders in chunks with a sentinel — no measurement math, capped DOM. */
-const GRID_CHUNK = 240;
+/** Grid renders in chunks with a sentinel — tuned to 60 for low memory. */
+const GRID_CHUNK = 60;
 /** Manual folder-size results are cached (LRU, hard cap). */
-const FOLDER_SIZE_CACHE_MAX = 200;
+const FOLDER_SIZE_CACHE_MAX = 100;
 
 let containerEl = null;
 let virtualState = { files: [], viewMode: 'list' };
@@ -85,7 +89,7 @@ export function initFileList() {
       || e.target.classList.contains('grid-group-items')
       || e.target.classList.contains('file-list-empty')) {
       e.preventDefault();
-      await showBackgroundMenu();
+      await showBackgroundMenu(e);
     }
   });
 
@@ -409,10 +413,131 @@ function attachFilterBar() {
   if (panes && filterBarEl.parentElement !== panes) panes.appendChild(filterBarEl);
 }
 
+function renderThisPcView(container) {
+  container.replaceChildren();
+  container.className = 'this-pc-container';
+
+  const { drives = [], knownFolders = {} } = store.getState();
+
+  // 1. Folders Section
+  const foldersSection = document.createElement('div');
+  foldersSection.className = 'this-pc-section';
+
+  const foldersTitle = document.createElement('div');
+  foldersTitle.className = 'this-pc-section-title';
+  foldersTitle.appendChild(icon(ICONS.folder, 'icon-sm'));
+  const foldersTitleText = document.createElement('span');
+  foldersTitleText.textContent = t('thisPc.folders') || '資料夾';
+  foldersTitle.appendChild(foldersTitleText);
+  foldersSection.appendChild(foldersTitle);
+
+  const foldersGrid = document.createElement('div');
+  foldersGrid.className = 'this-pc-folders-grid';
+
+  const FOLDER_ITEMS = [
+    { key: 'desktop', labelKey: 'sidebar.desktop', icon: ICONS.desktop, defaultName: 'Desktop' },
+    { key: 'downloads', labelKey: 'sidebar.downloads', icon: ICONS.download, defaultName: 'Downloads' },
+    { key: 'documents', labelKey: 'sidebar.documents', icon: ICONS.document, defaultName: 'Documents' },
+    { key: 'pictures', labelKey: 'sidebar.pictures', icon: ICONS.image, defaultName: 'Pictures' },
+    { key: 'music', labelKey: 'sidebar.music', icon: ICONS.music, defaultName: 'Music' },
+    { key: 'videos', labelKey: 'sidebar.videos', icon: ICONS.video, defaultName: 'Videos' },
+  ];
+
+  FOLDER_ITEMS.forEach(f => {
+    const fPath = knownFolders[f.key] || '';
+    const card = document.createElement('div');
+    card.className = 'this-pc-folder-card';
+    card.title = fPath;
+
+    const ico = icon(f.icon, 'this-pc-folder-icon');
+    const name = document.createElement('span');
+    name.className = 'this-pc-folder-name';
+    name.textContent = t(f.labelKey) || f.defaultName;
+
+    card.append(ico, name);
+    card.addEventListener('click', () => {
+      if (fPath) navigateTo(fPath);
+    });
+    foldersGrid.appendChild(card);
+  });
+
+  foldersSection.appendChild(foldersGrid);
+  container.appendChild(foldersSection);
+
+  // 2. Drives & Devices Section
+  const drivesSection = document.createElement('div');
+  drivesSection.className = 'this-pc-section';
+
+  const drivesTitle = document.createElement('div');
+  drivesTitle.className = 'this-pc-section-title';
+  drivesTitle.appendChild(icon(ICONS.drive, 'icon-sm'));
+  const drivesTitleText = document.createElement('span');
+  drivesTitleText.textContent = t('thisPc.devicesAndDrives') || '裝置與磁碟機';
+  drivesTitle.appendChild(drivesTitleText);
+  drivesSection.appendChild(drivesTitle);
+
+  const drivesGrid = document.createElement('div');
+  drivesGrid.className = 'this-pc-drives-grid';
+
+  drives.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'this-pc-drive-card';
+    card.title = `${d.label || '本機磁碟'} (${d.mountPoint})`;
+
+    const isSystemDrive = /^[Cc]:/.test(d.mountPoint);
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'this-pc-drive-icon-wrap';
+    iconWrap.appendChild(icon(isSystemDrive ? ICONS.desktop : ICONS.drive, 'icon'));
+
+    const info = document.createElement('div');
+    info.className = 'this-pc-drive-info';
+
+    const title = document.createElement('div');
+    title.className = 'this-pc-drive-title';
+    title.textContent = `${d.label || '本機磁碟'} (${d.mountPoint.replace(/\\$/, '')})`;
+    info.appendChild(title);
+
+    if (d.total > 0) {
+      const used = d.total - d.free;
+      const pct = Math.min(100, Math.max(0, (used / d.total) * 100));
+
+      const bar = document.createElement('div');
+      bar.className = 'this-pc-progress-bar';
+
+      const fill = document.createElement('div');
+      fill.className = `this-pc-progress-fill${pct >= 90 ? ' danger' : ''}`;
+      fill.style.width = `${pct.toFixed(1)}%`;
+      bar.appendChild(fill);
+      info.appendChild(bar);
+
+      const cap = document.createElement('div');
+      cap.className = 'this-pc-drive-capacity';
+      cap.textContent = `${formatFileSize(d.free)} 可用，共 ${formatFileSize(d.total)}`;
+      info.appendChild(cap);
+    }
+
+    card.append(iconWrap, info);
+    card.addEventListener('click', () => navigateTo(d.mountPoint));
+    drivesGrid.appendChild(card);
+  });
+
+  drivesSection.appendChild(drivesGrid);
+  container.appendChild(drivesSection);
+
+  updateStatusBar([]);
+}
+
 function render() {
   if (!containerEl) return;
   disconnectGridObserver();
-  const { isLoading, viewMode, error, files, sortBy } = store.getState();
+  const { isLoading, viewMode, error, files, sortBy, currentPath } = store.getState();
+
+  if (currentPath === 'nexus://this-pc') {
+    renderThisPcView(containerEl);
+    attachFilterBar();
+    return;
+  }
+
   const filtered = getFilteredFiles();
 
   const isGrid = viewMode === 'grid' || viewMode === 'grid-xl';
@@ -457,12 +582,30 @@ function render() {
 
   if (!filtered.length) {
     containerEl.replaceChildren();
+    const currentPath = store.get('currentPath') || '';
     const empty = document.createElement('div');
     empty.className = 'file-list-empty';
-    empty.appendChild(icon(filterQueryActive() ? ICONS.search : ICONS.folder, 'icon'));
-    const span = document.createElement('span');
-    span.textContent = filterQueryActive() ? t('filter.noResults') : t('fileList.empty');
-    empty.appendChild(span);
+    if (currentPath.startsWith('nexus://tag/')) {
+      const tagId = currentPath.replace('nexus://tag/', '');
+      const tagInfo = getTagInfo(tagId);
+      empty.appendChild(icon(ICONS.tag, 'icon'));
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.style.color = 'var(--text-primary)';
+      title.textContent = t('tagView.emptyTitle');
+      const hint = document.createElement('div');
+      hint.style.fontSize = 'var(--fs-xs)';
+      hint.style.color = 'var(--text-secondary)';
+      hint.style.maxWidth = '360px';
+      hint.style.textAlign = 'center';
+      hint.textContent = t('tagView.emptyHint');
+      empty.append(title, hint);
+    } else {
+      empty.appendChild(icon(filterQueryActive() ? ICONS.search : ICONS.folder, 'icon'));
+      const span = document.createElement('span');
+      span.textContent = filterQueryActive() ? t('filter.noResults') : t('fileList.empty');
+      empty.appendChild(span);
+    }
     containerEl.appendChild(empty);
     updateStatusBar([]);
     attachFilterBar();
@@ -674,6 +817,7 @@ function buildGridFragment(start, end) {
 }
 
 function disconnectGridObserver() {
+  disconnectThumbnailObserver();
   if (gridChunkState?.observer) gridChunkState.observer.disconnect();
   gridChunkState = null;
 }
@@ -742,7 +886,8 @@ function buildRow(file, idx, selectedFiles) {
         return;
       }
       try {
-        await renamePath(file.path, newName);
+        const newPath = await renamePath(file.path, newName);
+        undoManager.recordRename(file.path, newPath || file.path.replace(/[^\\/]+$/, newName), file.name, newName);
         toast(t('context.rename') + ': ' + newName, 'success');
         await refreshCurrent();
       } catch (err) {
@@ -772,18 +917,52 @@ function buildRow(file, idx, selectedFiles) {
   }
 
   const fileTags = store.get('fileTags') || {};
-  const tags = fileTags[file.path] || [];
-  if (tags.length > 0 && renamingPath !== file.path) {
-    const tagsWrap = document.createElement('div');
-    tagsWrap.className = 'file-tags-inline';
-    tags.forEach((tId) => {
-      const dot = document.createElement('span');
-      dot.className = 'tag-dot';
-      dot.style.background = TAG_COLORS[tId] || '#888';
-      dot.title = t(tId);
-      tagsWrap.appendChild(dot);
-    });
-    nameCell.appendChild(tagsWrap);
+  const tags = fileTags[file.path];
+  if (tags && tags.length > 0 && renamingPath !== file.path) {
+    const isGrid = store.get('viewMode') === 'grid' || store.get('viewMode') === 'grid-xl';
+    if (isGrid) {
+      const badge = document.createElement('div');
+      badge.className = 'grid-tags-badge';
+      for (let i = 0; i < tags.length; i++) {
+        const dot = createTagDot(tags[i]);
+        dot.title = t(getTagInfo(tags[i]).labelKey) || tags[i];
+        badge.appendChild(dot);
+      }
+      row.appendChild(badge);
+    } else {
+      const tagsWrap = document.createElement('div');
+      tagsWrap.className = 'file-tags-inline';
+      if (tags.length <= 2) {
+        for (let i = 0; i < tags.length; i++) {
+          const info = getTagInfo(tags[i]);
+          const label = t(info.labelKey) || tags[i];
+          const chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          chip.style.setProperty('--tag-color', info.color);
+          chip.style.setProperty('--tag-bg', info.bg);
+          chip.style.setProperty('--tag-border', info.border);
+          chip.title = label;
+
+          const dot = createTagDot(tags[i]);
+          const txt = document.createElement('span');
+          txt.textContent = label;
+          chip.append(dot, txt);
+          tagsWrap.appendChild(chip);
+        }
+      } else {
+        const cluster = document.createElement('div');
+        cluster.className = 'tag-cluster-chip';
+        const names = [];
+        for (let i = 0; i < tags.length; i++) {
+          const info = getTagInfo(tags[i]);
+          names.push(t(info.labelKey) || tags[i]);
+          cluster.appendChild(createTagDot(tags[i]));
+        }
+        cluster.title = names.join(', ');
+        tagsWrap.appendChild(cluster);
+      }
+      nameCell.appendChild(tagsWrap);
+    }
   }
   row.appendChild(nameCell);
 
@@ -810,7 +989,7 @@ function buildRow(file, idx, selectedFiles) {
   });
   row.addEventListener('dblclick', async (e) => {
     if (renamingPath || e.target.classList.contains('rename-input')) return;
-    if (file.isDir || isArchiveFile(file.name) || file.path.startsWith('archive://') || file.path.startsWith('zip://')) {
+    if (file.isDir || isArchiveFile(file.name)) {
       navigateTo(file.path);
     } else {
       try { await openFile(file.path); } catch (err) { console.error(err); }
@@ -820,7 +999,7 @@ function buildRow(file, idx, selectedFiles) {
     e.preventDefault();
     e.stopPropagation();
     handleClick(file, idx, e);
-    await showFileMenu(file);
+    await showFileMenu(file, e);
   });
 
   return row;
@@ -879,7 +1058,7 @@ function onListKeydown(e) {
     e.preventDefault();
     const file = focusedOrSelected(filtered);
     if (!file) return;
-    if (file.isDir || isArchiveFile(file.name) || file.path.startsWith('archive://') || file.path.startsWith('zip://')) {
+    if (file.isDir || isArchiveFile(file.name)) {
       navigateTo(file.path);
     } else {
       openFile(file.path).catch(console.error);
@@ -961,163 +1140,274 @@ function ensureFocusVisible() {
 
 // ── Context menus ────────────────────────────────────────────────────────────
 
-async function showFileMenu(file) {
-  try {
-    const items = [
-      await MenuItem.new({
-        id: 'open',
-        text: t('context.open'),
-        action: async () => {
-          if (file.isDir) navigateTo(file.path);
-          else await openFile(file.path);
-        },
-      }),
-      await MenuItem.new({
-        id: 'copyPath',
-        text: t('context.copyPath'),
-        action: async () => {
-          try {
-            await navigator.clipboard.writeText(file.path);
-            toast(t('context.copyPath'), 'success');
-          } catch { /* ignore */ }
-        },
-      }),
-      await MenuItem.new({
-        id: 'reveal',
-        text: t('context.showInExplorer'),
-        action: () => revealInExplorer(file.path).catch((err) => toast(String(err), 'error')),
-      }),
-      ...(isArchiveFile(file.name) ? [
-        await MenuItem.new({
-          id: 'browseArchive',
-          text: '瀏覽壓縮檔內容',
-          action: () => navigateTo(file.path),
-        }),
-        await MenuItem.new({
-          id: 'extractHere',
-          text: '解壓縮至此',
+async function showFileMenu(file, e) {
+  const x = e ? e.clientX : window.innerWidth / 2;
+  const y = e ? e.clientY : window.innerHeight / 2;
+
+  // Windows 11 Signature Top Command Bar
+  const commandBar = [
+    {
+      id: 'cut',
+      icon: 'scissors',
+      title: `${t('context.cut') || '剪下'} (Ctrl+X)`,
+      action: () => {
+        store.setState({ selectedFiles: new Set([file.path]) });
+        cutSelection();
+      },
+    },
+    {
+      id: 'copy',
+      icon: 'copy',
+      title: `${t('context.copy') || '複製'} (Ctrl+C)`,
+      action: () => {
+        store.setState({ selectedFiles: new Set([file.path]) });
+        copySelection();
+      },
+    },
+    {
+      id: 'rename',
+      icon: 'edit',
+      title: `${t('context.rename') || '重新命名'} (F2)`,
+      action: () => beginInlineRename(file),
+    },
+    {
+      id: 'copyPath',
+      icon: 'clipboard',
+      title: t('context.copyPath') || '複製路徑',
+      action: async () => {
+        try {
+          await navigator.clipboard.writeText(file.path);
+          toast(t('context.copyPath'), 'success');
+        } catch { /* ignore */ }
+      },
+    },
+    {
+      id: 'delete',
+      icon: 'trash',
+      title: `${t('context.deleteToBin') || t('context.delete') || '刪除'} (Delete)`,
+      action: async () => {
+        try {
+          await deletePath(file.path);
+          undoManager.recordDelete([file.path], file.name);
+          store.setState({ selectedFiles: new Set() });
+          await refreshCurrent();
+          toast(t('context.delete'), 'info');
+        } catch (err) {
+          toast(t('context.deleteFailed') + ': ' + err, 'error');
+        }
+      },
+    },
+  ];
+
+  const items = [
+    {
+      id: 'open',
+      icon: 'externalLink',
+      text: t('context.open') || '開啟',
+      shortcut: 'Enter',
+      action: async () => {
+        if (file.isDir) navigateTo(file.path);
+        else await openFile(file.path);
+      },
+    },
+    ...(!file.isDir ? [{
+      id: 'runAsAdmin',
+      icon: 'shield',
+      text: t('context.runAsAdmin') || '以系統管理員身分執行',
+      action: async () => {
+        try {
+          await openFileAsAdmin(file.path);
+        } catch (err) {
+          toast(String(err), 'error');
+        }
+      },
+    }] : []),
+    ...(!file.isDir ? [{
+      id: 'openWith',
+      icon: 'moreHorizontal',
+      text: t('context.openWith') || '以…開啟',
+      submenu: async () => {
+        const subItems = [];
+        try {
+          const apps = await getOpenWithApps(file.path);
+          if (apps && apps.length > 0) {
+            for (const app of apps) {
+              subItems.push({
+                id: `open-with-${app.path}`,
+                icon: 'file',
+                text: app.name,
+                action: async () => {
+                  try {
+                    await openFileWith(file.path, app.path);
+                  } catch (err) {
+                    toast(String(err), 'error');
+                  }
+                },
+              });
+            }
+            subItems.push({ type: 'separator' });
+          }
+        } catch (err) {
+          console.warn('getOpenWithApps failed:', err);
+        }
+
+        subItems.push({
+          id: 'open-with-dialog',
+          icon: 'settings',
+          text: t('context.chooseAnotherApp') || '選擇其他應用程式…',
           action: async () => {
             try {
-              const dest = parentPath(file.path);
-              await extractArchive(file.path, dest);
-              await refreshCurrent();
-              toast('解壓縮完成', 'success');
+              await showOpenWithDialog(file.path);
             } catch (err) {
-              toast('解壓縮失敗: ' + err, 'error');
+              toast(String(err), 'error');
             }
           },
-        }),
-        await MenuItem.new({
-          id: 'extractToFolder',
-          text: `解壓縮至 "${stripArchiveExt(file.name)}"`,
+        });
+
+        subItems.push({
+          id: 'open-with-browse',
+          icon: 'search',
+          text: t('context.browseForApp') || '瀏覽應用程式 (.exe)…',
           action: async () => {
             try {
-              const dest = joinPath(parentPath(file.path), stripArchiveExt(file.name));
-              await extractArchive(file.path, dest);
-              await refreshCurrent();
-              toast('解壓縮完成', 'success');
+              const picked = await pickExecutableFile();
+              if (picked) {
+                await openFileWith(file.path, picked);
+              }
             } catch (err) {
-              toast('解壓縮失敗: ' + err, 'error');
+              toast(String(err), 'error');
             }
           },
-        }),
-      ] : []),
-      ...(file.isDir ? [
-        await MenuItem.new({
-          id: 'openTerminalHere',
-          text: t('context.openTerminal'),
-          action: () => openTerminal(file.path).catch((err) => toast(String(err), 'error')),
-        }),
-        await MenuItem.new({
-          id: 'calcSize',
-          text: t('context.calculateSize'),
-          action: () => calculateFolderSize(file),
-        }),
-      ] : []),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
-        id: 'cut',
-        text: t('context.cut') || 'Cut',
-        action: () => {
-          store.setState({ selectedFiles: new Set([file.path]) });
-          cutSelection();
-        },
-      }),
-      await MenuItem.new({
-        id: 'copy',
-        text: t('context.copy') || 'Copy',
-        action: () => {
-          store.setState({ selectedFiles: new Set([file.path]) });
-          copySelection();
-        },
-      }),
-      await MenuItem.new({
-        id: 'paste',
-        text: t('context.paste') || 'Paste',
-        action: () => pasteClipboard(),
-      }),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
-        id: 'rename',
-        text: t('context.rename'),
-        action: () => beginInlineRename(file),
-      }),
-      await MenuItem.new({
-        id: 'delete',
-        text: t('context.deleteToBin') || t('context.delete'),
+        });
+
+        return subItems;
+      },
+    }] : []),
+    ...(isArchiveFile(file.name) ? [
+      {
+        id: 'browseArchive',
+        icon: 'folder',
+        text: '瀏覽壓縮檔內容',
+        action: () => navigateTo(file.path),
+      },
+      {
+        id: 'extractHere',
+        icon: 'archive',
+        text: '解壓縮至此',
         action: async () => {
-          if (!confirm(t('context.deleteConfirm', { name: file.name }))) return;
           try {
-            await deletePath(file.path);
-            store.setState({ selectedFiles: new Set() });
+            const dest = parentPath(file.path);
+            await extractArchive(file.path, dest);
             await refreshCurrent();
-            toast(t('context.delete'), 'success');
+            toast('解壓縮完成', 'success');
           } catch (err) {
-            toast(t('context.deleteFailed') + ': ' + err, 'error');
+            toast('解壓縮失敗: ' + err, 'error');
           }
         },
-      }),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await buildTagSubmenu(file),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
-        id: 'properties',
-        text: t('context.properties'),
-        action: () => {
-          const sizeText = file.isDir
-            ? (() => { const s = folderSizeCacheGet(file.path); return s != null ? formatFileSize(s) : '—'; })()
-            : formatFileSize(file.size);
-          alert([
-            `${t('context.propName')}: ${file.name}`,
-            `${t('context.propPath')}: ${file.path}`,
-            `${t('context.propType')}: ${file.isDir ? t('fileList.folder') : (file.extension || '—')}`,
-            `${t('context.propSize')}: ${sizeText}`,
-            `${t('context.propModified')}: ${formatDate(file.modified)}`,
-          ].join('\n'));
+      },
+      {
+        id: 'extractToFolder',
+        icon: 'archive',
+        text: `解壓縮至 "${stripArchiveExt(file.name)}"`,
+        action: async () => {
+          try {
+            const dest = joinPath(parentPath(file.path), stripArchiveExt(file.name));
+            await extractArchive(file.path, dest);
+            await refreshCurrent();
+            toast('解壓縮完成', 'success');
+          } catch (err) {
+            toast('解壓縮失敗: ' + err, 'error');
+          }
         },
-      }),
-    ];
-    await (await Menu.new({ items })).popup();
-  } catch (err) {
-    console.warn('Native menu failed', err);
-  }
+      },
+    ] : []),
+    ...(file.isDir ? [
+      {
+        id: 'openTerminalHere',
+        icon: 'command',
+        text: t('context.openTerminal'),
+        action: () => openTerminal(file.path).catch((err) => toast(String(err), 'error')),
+      },
+      {
+        id: 'openTerminalHereAsAdmin',
+        icon: 'shield',
+        text: t('context.openTerminalAsAdmin') || '以系統管理員身分開啟終端機',
+        action: () => openTerminalAsAdmin(file.path).catch((err) => toast(String(err), 'error')),
+      },
+      {
+        id: 'calcSize',
+        icon: 'info',
+        text: t('context.calculateSize'),
+        action: () => calculateFolderSize(file),
+      },
+    ] : []),
+    { type: 'separator' },
+    {
+      id: 'paste',
+      icon: 'paste',
+      text: t('context.paste') || '貼上',
+      shortcut: 'Ctrl+V',
+      action: () => pasteClipboard(),
+    },
+    { type: 'separator' },
+    {
+      id: 'reveal',
+      icon: 'desktop',
+      text: t('context.showInExplorer'),
+      action: () => revealInExplorer(file.path).catch((err) => toast(String(err), 'error')),
+    },
+    {
+      id: 'tags',
+      icon: 'tag',
+      text: t('context.tags'),
+      submenu: () => buildTagSubmenuItems(file),
+    },
+    { type: 'separator' },
+    {
+      id: 'properties',
+      icon: 'info',
+      text: t('context.properties'),
+      shortcut: 'Alt+Enter',
+      action: () => showPropertiesDialog(file),
+    },
+  ];
+
+  await showFluentContextMenu({ x, y, commandBar, items });
 }
 
-async function buildTagSubmenu(file) {
+function buildTagSubmenuItems(file) {
   const current = store.get('fileTags')[file.path] || [];
   const tagItems = [];
-  for (const tag of DEFAULT_TAGS) {
+  const allTags = getAllTags();
+  for (const tag of allTags) {
     const checked = current.includes(tag.id);
-    tagItems.push(await MenuItem.new({
+    const tagName = t(tag.labelKey) || tag.name || tag.id;
+    tagItems.push({
       id: `tag-${tag.id}`,
-      text: (checked ? '✓ ' : '   ') + t(tag.labelKey),
+      iconHtml: `<span class="fluent-tag-dot" style="background:${tag.color}"></span>`,
+      text: tagName,
+      checked,
       action: () => {
         store.toggleFileTag(file.path, tag.id);
         render();
       },
-    }));
+    });
   }
-  return await Submenu.new({ text: t('context.tags'), items: tagItems });
+  tagItems.push({ type: 'separator' });
+  tagItems.push({
+    id: 'add-new-tag',
+    icon: 'plus',
+    text: t('tags.addTag') || '新增標籤…',
+    action: async () => {
+      const res = await showTagDialog();
+      if (res && res.name) {
+        const newTag = store.addTag(res, DEFAULT_TAGS);
+        store.toggleFileTag(file.path, newTag.id);
+        render();
+      }
+    },
+  });
+  return tagItems;
 }
 
 /** Manual recursive size — only for the asked folder, spawn_blocking on the Rust side. */
@@ -1146,8 +1436,12 @@ function globToRegex(pattern) {
   return new RegExp(`^${escaped}$`, 'i');
 }
 
-function selectByPattern() {
-  const pattern = prompt(t('context.selectPatternPrompt'), '*');
+async function selectByPattern() {
+  const pattern = await showPromptDialog({
+    title: t('context.selectByPattern') || '按模式選取',
+    message: t('context.selectPatternPrompt') || '選取符合條件的項目（可用 * 和 ?）：',
+    defaultValue: '*',
+  });
   if (!pattern) return;
   const re = globToRegex(pattern);
   const sel = new Set(store.get('selectedFiles'));
@@ -1165,80 +1459,156 @@ function invertSelection() {
   store.setState({ selectedFiles: inverted });
 }
 
-async function showBackgroundMenu() {
-  const { currentPath } = store.getState();
+async function showBackgroundMenu(e) {
+  const { currentPath, viewMode } = store.getState();
   if (!currentPath || currentPath.startsWith('nexus://')) return;
-  try {
-    const items = [
-      await MenuItem.new({ id: 'refresh', text: t('context.refresh'), action: () => refreshCurrent() }),
-      await MenuItem.new({ id: 'paste', text: t('context.paste') || 'Paste', action: () => pasteClipboard() }),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
-        id: 'newFolder',
-        text: t('context.newFolder'),
-        action: async () => {
-          const name = prompt(t('context.newFolderPrompt'), t('context.newFolderDefault'));
-          if (!name) return;
-          try {
-            await createFolder(currentPath, name);
-            await refreshCurrent();
-          } catch (err) {
-            toast(t('context.createFailed') + ': ' + err, 'error');
-          }
+
+  const x = e ? e.clientX : window.innerWidth / 2;
+  const y = e ? e.clientY : window.innerHeight / 2;
+
+  const items = [
+    {
+      id: 'view',
+      icon: 'grid',
+      text: t('toolbar.view') || '檢視',
+      submenu: [
+        {
+          id: 'view-list',
+          icon: 'list',
+          text: t('context.viewList') || '清單檢視',
+          checked: viewMode === 'list',
+          action: () => store.setState({ viewMode: 'list' }),
         },
-      }),
-      await MenuItem.new({
-        id: 'newFile',
-        text: t('context.newTextFile'),
-        action: async () => {
-          const name = prompt(t('context.newFilePrompt'), t('context.newFileDefault'));
-          if (!name) return;
-          try {
-            await createFile(currentPath, name);
-            await refreshCurrent();
-          } catch (err) {
-            toast(t('context.createFailed') + ': ' + err, 'error');
-          }
+        {
+          id: 'view-grid',
+          icon: 'grid',
+          text: t('context.viewGrid') || '大圖示',
+          checked: viewMode === 'grid',
+          action: () => store.setState({ viewMode: 'grid' }),
         },
-      }),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
-        id: 'copyCurrentPath',
-        text: t('context.copyCurrentPath'),
-        action: async () => {
-          try {
-            await navigator.clipboard.writeText(currentPath);
-            toast(t('context.copyCurrentPath'), 'success');
-          } catch { /* */ }
+        {
+          id: 'view-grid-xl',
+          icon: 'grid',
+          text: '特大圖示',
+          checked: viewMode === 'grid-xl',
+          action: () => store.setState({ viewMode: 'grid-xl' }),
         },
-      }),
-      await MenuItem.new({
-        id: 'openTerminal',
-        text: t('context.openTerminal'),
-        action: () => openTerminal(currentPath).catch((err) => toast(String(err), 'error')),
-      }),
-      await MenuItem.new({
-        id: 'revealFolder',
-        text: t('context.revealFolder'),
-        action: () => revealInExplorer(currentPath).catch((err) => toast(String(err), 'error')),
-      }),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
-        id: 'selectPattern',
-        text: t('context.selectByPattern'),
-        action: () => selectByPattern(),
-      }),
-      await MenuItem.new({
-        id: 'invertSelection',
-        text: t('context.invertSelection'),
-        action: () => invertSelection(),
-      }),
-      await PredefinedMenuItem.new({ item: 'Separator' }),
-      await MenuItem.new({
+      ],
+    },
+    { type: 'separator' },
+    {
+      id: 'refresh',
+      icon: 'refresh',
+      text: t('context.refresh'),
+      shortcut: 'F5',
+      action: () => refreshCurrent(),
+    },
+    {
+      id: 'paste',
+      icon: 'paste',
+      text: t('context.paste') || '貼上',
+      shortcut: 'Ctrl+V',
+      action: () => pasteClipboard(),
+    },
+    { type: 'separator' },
+    {
+      id: 'newFolder',
+      icon: 'folderPlus',
+      text: t('context.newFolder'),
+      action: async () => {
+        const name = await showPromptDialog({
+          title: t('context.newFolder') || '新增資料夾',
+          message: t('context.newFolderPrompt') || '請輸入資料夾名稱：',
+          defaultValue: t('context.newFolderDefault') || '新增資料夾',
+        });
+        if (!name) return;
+        try {
+          const createdPath = await createFolder(currentPath, name);
+          undoManager.recordCreate(createdPath || `${currentPath}\\${name}`, name);
+          await refreshCurrent();
+        } catch (err) {
+          toast(t('context.createFailed') + ': ' + err, 'error');
+        }
+      },
+    },
+    {
+      id: 'newFile',
+      icon: 'filePlus',
+      text: t('context.newTextFile'),
+      action: async () => {
+        const name = await showPromptDialog({
+          title: t('context.newTextFile') || '新增文字文件',
+          message: t('context.newFilePrompt') || '請輸入檔案名稱：',
+          defaultValue: t('context.newFileDefault') || '新增文字文件.txt',
+        });
+        if (!name) return;
+        try {
+          const createdPath = await createFile(currentPath, name);
+          undoManager.recordCreate(createdPath || `${currentPath}\\${name}`, name);
+          await refreshCurrent();
+        } catch (err) {
+          toast(t('context.createFailed') + ': ' + err, 'error');
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      id: 'copyCurrentPath',
+      icon: 'clipboard',
+      text: t('context.copyCurrentPath'),
+      action: async () => {
+        try {
+          await navigator.clipboard.writeText(currentPath);
+          toast(t('context.copyCurrentPath'), 'success');
+        } catch { /* ignore */ }
+      },
+    },
+    {
+      id: 'openTerminal',
+      icon: 'command',
+      text: t('context.openTerminal'),
+      action: () => openTerminal(currentPath).catch((err) => toast(String(err), 'error')),
+    },
+    {
+      id: 'openTerminalAsAdmin',
+      icon: 'shield',
+      text: t('context.openTerminalAsAdmin') || '以系統管理員身分開啟終端機',
+      action: () => openTerminalAsAdmin(currentPath).catch((err) => toast(String(err), 'error')),
+    },
+    {
+      id: 'revealFolder',
+      icon: 'desktop',
+      text: t('context.revealFolder'),
+      action: () => revealInExplorer(currentPath).catch((err) => toast(String(err), 'error')),
+    },
+    { type: 'separator' },
+    {
+      id: 'selectPattern',
+      icon: 'search',
+      text: t('context.selectByPattern'),
+      action: () => selectByPattern(),
+    },
+    {
+      id: 'invertSelection',
+      icon: 'sort',
+      text: t('context.invertSelection'),
+      action: () => invertSelection(),
+    },
+    ...(currentPath === 'nexus://trash' ? [
+      { type: 'separator' },
+      {
         id: 'emptyBin',
+        icon: 'trash',
         text: t('context.emptyBin'),
         action: async () => {
-          if (!confirm(t('context.emptyBinConfirm'))) return;
+          const ok = await showConfirmDialog({
+            title: t('context.emptyBin') || '清空回收筒',
+            message: t('context.emptyBinConfirm') || '確定要永久刪除資源回收筒中的所有項目嗎？',
+            confirmText: t('context.emptyBin') || '清空',
+            cancelText: t('common.cancel') || '取消',
+            isDanger: true,
+          });
+          if (!ok) return;
           try {
             await emptyRecycleBin();
             toast(t('context.emptyBin'), 'success');
@@ -1246,12 +1616,11 @@ async function showBackgroundMenu() {
             toast(t('context.emptyBinFailed') + ': ' + err, 'error');
           }
         },
-      }),
-    ];
-    await (await Menu.new({ items })).popup();
-  } catch (err) {
-    console.warn('Background menu failed', err);
-  }
+      }
+    ] : []),
+  ];
+
+  await showFluentContextMenu({ x, y, items });
 }
 
 // ── Selection / status ───────────────────────────────────────────────────────
@@ -1359,4 +1728,20 @@ function sortFiles(files, sortBy, order) {
     // Equal keys always fall back to name tiebreaker
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
+}
+
+export function openPropertiesForSelection() {
+  const { selectedFiles } = store.getState();
+  const filtered = getFilteredFiles();
+  if (selectedFiles.size > 0) {
+    const firstPath = selectedFiles.values().next().value;
+    const file = filtered.find(f => f.path === firstPath);
+    if (file) {
+      showPropertiesDialog(file);
+      return;
+    }
+  }
+  if (focusIndex >= 0 && filtered[focusIndex]) {
+    showPropertiesDialog(filtered[focusIndex]);
+  }
 }
