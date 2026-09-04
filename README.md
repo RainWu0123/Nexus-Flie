@@ -7,6 +7,11 @@
   **A lightning-fast, lean, and modern Windows 11 desktop file manager.**  
   *Engineered with Tauri 2, Vite, and Rust — zero Explorer bloat, pure native performance.*
 
+  <p align="center">
+    <a href="README.md"><b>English</b></a> •
+    <a href="README.zh-TW.md">繁體中文</a>
+  </p>
+
   [![Tauri 2](https://img.shields.io/badge/Tauri-v2.0-24C8D8?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app/)
   [![Rust](https://img.shields.io/badge/Rust-1.75+-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
   [![Vite](https://img.shields.io/badge/Vite-v6.0-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
